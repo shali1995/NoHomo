@@ -1,0 +1,196 @@
+{
+ "accounts": [
+  {
+   "name": "daniel",
+   "handle": "@dmanlian",
+   "avatar": "https://pbs.twimg.com/profile_images/2065641380064505856/Bv0ZEqFp_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "kyle",
+   "handle": "@kyle",
+   "avatar": "https://pbs.twimg.com/profile_images/2094952188950753281/Os1X2cna_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Paul",
+   "handle": "@paulerlanger",
+   "avatar": "https://pbs.twimg.com/profile_images/2088120539411869696/ZBIhoSpp_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Sh0edog \ud83c\uddfa\ud83c\udde6",
+   "handle": "@sh0edog",
+   "avatar": "https://pbs.twimg.com/profile_images/1649080547031896066/og8YnBZf_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "se",
+   "handle": "@seyong",
+   "avatar": "https://pbs.twimg.com/profile_images/2099817727883939840/4lNcbPbq_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "rasmr",
+   "handle": "@rasmr_eth",
+   "avatar": "https://pbs.twimg.com/profile_images/2098785474508701698/IqHjNuQ8_bigger.jpg",
+   "affiliated": "https://t.co/ww8kAgB52t"
+  },
+  {
+   "name": "iain",
+   "handle": "@isiain",
+   "avatar": "https://pbs.twimg.com/profile_images/1507699494506352643/aIpRE1S-_bigger.jpg",
+   "affiliated": ""
+  },
+  {
+   "name": "orangie",
+   "handle": "@orangie",
+   "avatar": "https://pbs.twimg.com/profile_images/2105410277877719040/Y0J2vP7B_bigger.jpg",
+   "affiliated": ""
+  },
+  {
+   "name": "tina \ud83c\udf44",
+   "handle": "@patagucci_girl",
+   "avatar": "https://pbs.twimg.com/profile_images/2077479927767568384/4_-zk7Su_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Klutch",
+   "handle": "@Klutch_Trades",
+   "avatar": "https://pbs.twimg.com/profile_images/1906853275644887040/s4U8pWGh_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Ian Lapham",
+   "handle": "@ianlapham",
+   "avatar": "https://pbs.twimg.com/profile_images/2102943923832324096/qG6TFa3D_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "christopher li",
+   "handle": "@listopherchi",
+   "avatar": "https://pbs.twimg.com/profile_images/2094806446638583808/wLzOg9Qz_bigger.jpg",
+   "affiliated": ""
+  },
+  {
+   "name": "Jay",
+   "handle": "@itshecoz",
+   "avatar": "https://pbs.twimg.com/profile_images/2094596679013965824/usGhW0Zz_bigger.jpg",
+   "affiliated": ""
+  },
+  {
+   "name": "Ash Robin",
+   "handle": "@ashrobin",
+   "avatar": "https://pbs.twimg.com/profile_images/1616178369011269648/2MUSZzrQ_bigger.jpg",
+   "affiliated": "https://t.co/e0mf37sZSA"
+  },
+  {
+   "name": "chelsy",
+   "handle": "@chelsy_wu",
+   "avatar": "https://pbs.twimg.com/profile_images/1801389179869306880/jJn-C-3__bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Maurits",
+   "handle": "@mauritsneo",
+   "avatar": "https://pbs.twimg.com/profile_images/1920991488055369728/gpTM35ho_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Lucas",
+   "handle": "@lucasw99",
+   "avatar": "https://pbs.twimg.com/profile_images/2051869229100539906/vmKEq93s_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Easy",
+   "handle": "@NotSoEasyMoney",
+   "avatar": "https://pbs.twimg.com/profile_images/1962922966326427648/LTLWaY2y_bigger.jpg",
+   "affiliated": "https://x.com/k9strategy"
+  },
+  {
+   "name": "Sacha",
+   "handle": "@NBMSacha",
+   "avatar": "https://pbs.twimg.com/profile_images/1684304297222193153/h15lEnOi_bigger.jpg",
+   "affiliated": "https://x.com/mobulaio"
+  },
+  {
+   "name": "ren",
+   "handle": "@renyukong",
+   "avatar": "https://pbs.twimg.com/profile_images/2026121518485319681/OM1IvlIw_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "MCG",
+   "handle": "@MCGlive",
+   "avatar": "https://pbs.twimg.com/profile_images/2053670125283246080/_h-RqIgQ_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Krutzky Trades",
+   "handle": "@KrutzkyTrades",
+   "avatar": "https://pbs.twimg.com/profile_images/2100561155366301696/gQ4CnIJq_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "qrazhan",
+   "handle": "@qrazhan_ultd",
+   "avatar": "https://pbs.twimg.com/profile_images/1981195554022440960/mcx-ClOg_bigger.png",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Yoon",
+   "handle": "@memespaymyrent",
+   "avatar": "https://pbs.twimg.com/profile_images/2024273709348114433/U2ouKr7G_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Perth",
+   "handle": "@0xPerth_",
+   "avatar": "https://pbs.twimg.com/profile_images/2097648605213626368/YbJhjbzv_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Ben",
+   "handle": "@benaratame",
+   "avatar": "https://pbs.twimg.com/profile_images/2103932365257031680/vQX9WJQ0_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "BG",
+   "handle": "@villagebythexyz",
+   "avatar": "https://pbs.twimg.com/profile_images/2104792644710723584/PH7Qm5c9_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "andy",
+   "handle": "@andybids",
+   "avatar": "https://pbs.twimg.com/profile_images/2104375411043962880/VC95IrIc_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "Sacha Delhoux",
+   "handle": "@sacha_io",
+   "avatar": "https://pbs.twimg.com/profile_images/1986576189037654016/xmrHWT2K_bigger.jpg",
+   "affiliated": "https://x.com/mobulaio"
+  },
+  {
+   "name": "Charlie Katsikaris",
+   "handle": "@Ckatsikaris1",
+   "avatar": "https://pbs.twimg.com/profile_images/1937915205805129728/eUtQbO2a_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  },
+  {
+   "name": "scs",
+   "handle": "@onchain_sheikh",
+   "avatar": "https://pbs.twimg.com/profile_images/1963697231904886785/FyG4isCr_bigger.jpg",
+   "affiliated": ""
+  },
+  {
+   "name": "Risk On",
+   "handle": "@RiskOnPod",
+   "avatar": "https://pbs.twimg.com/profile_images/2064630536845619200/TH1qjwWI_bigger.jpg",
+   "affiliated": "https://x.com/fomo"
+  }
+ ]
+}

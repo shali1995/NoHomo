@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- What a search engine and a link preview read. The title and description are ours now: the
+         capture's title was the recorded token page, which told a crawler nothing. -->
+    <title>NOHOMO — FOMO is gay. This isn't.</title>
+    <meta name="description" content="FOMO is HOMO. If you use it, you're gay. NOHOMO is the open Solana terminal — targets, dip orders, your own gas, and ECHO ranking what actually moved. Built because nobody else would." />
+    <meta name="theme-color" content="#0b0b0f" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- Open Graph: the card X, Discord, Telegram and iMessage build from a shared link.
+         Absolute on purpose: crawlers will not resolve a relative path. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="NOHOMO" />
+    <meta property="og:title" content="NOHOMO — FOMO is gay. This isn't." />
+    <meta property="og:description" content="FOMO is HOMO. If you use it, you're gay. NOHOMO is the open Solana terminal — targets, dip orders, your own gas, and ECHO ranking what actually moved. Built because nobody else would." />
+    <meta property="og:url" content="https://nohomo.giize.com/" />
+    <meta property="og:image" content="https://nohomo.giize.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- X reads these first, and falls back to Open Graph without them. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NOHOMO — FOMO is gay. This isn't." />
+    <meta name="twitter:description" content="FOMO is HOMO. If you use it, you're gay. NOHOMO is the open Solana terminal — targets, dip orders, your own gas, and ECHO ranking what actually moved. Built because nobody else would." />
+    <meta name="twitter:image" content="https://nohomo.giize.com/og.png" />
+
+    <!-- One icon declaration is enough: with it, no browser falls back to asking for
+         /favicon.ico and getting a 404. The SVG is 1.6 KB against the PNG's 828 KB. -->
+    <!-- The app's own mark — the avatar — with the name in the title beside it. The glyph that sat
+         here before was FOMO's. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon.png" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

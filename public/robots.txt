@@ -1,0 +1,5 @@
+# NOHOMO — everything is public, including the crawlers that build link previews.
+User-agent: *
+Allow: /
+
+Sitemap: https://nohomo.giize.com/sitemap.xml

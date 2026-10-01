@@ -1,0 +1,26 @@
+{
+  // Editor wiring for the captured data in src/lib. There is no TypeScript
+  // dependency and no type-checking step in this project: this file only teaches
+  // the editor the shapes declared in src/lib/types.d.ts, so hovering an import
+  // (feed.json, trades.json, token.js, …) shows real keys and autocompletes them.
+  // checkJs is false on purpose — nothing here can fail a build.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "$lib/*": ["src/lib/*"]
+    }
+  },
+  "include": ["src/**/*.js", "src/**/*.d.ts", "src/**/*.json"],
+  "exclude": ["node_modules", "dist"]
+}
