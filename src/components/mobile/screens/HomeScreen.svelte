@@ -8,6 +8,7 @@
   import Mark from "../../../icons/nohomo.svelte";
   import TraderRail from "../TraderRail.svelte";
   import HomeTabs from "../HomeTabs.svelte";
+  import EchoFilters from "../EchoFilters.svelte";
   import ScanChips from "../ScanChips.svelte";
   import TokenRow from "../TokenRow.svelte";
   import WatchlistScreen from "./WatchlistScreen.svelte";
@@ -66,6 +67,8 @@
   const LIST_KIND = { crypto: "majors", stocks: "stocks" };
 
   let facet = $state("echo");
+  /** Echo's filters, kept as a panel over the list rather than a rail above it. */
+  let filtersOpen = $state(false);
 
   function pickFacet(id) {
     if (!FACETS.some((entry) => entry.id === id)) return;
@@ -186,7 +189,17 @@
     </div>
   {:else}
   <div class="body m-scroll">
-    <ScanChips views={FACETS} active={facet} onselect={pickFacet} onclear={() => pickFacet("trending")} />
+    <ScanChips
+      views={FACETS}
+      active={facet}
+      onselect={pickFacet}
+      onclear={() => pickFacet("trending")}
+      gear="echo"
+      ongear={() => (filtersOpen = true)}
+    />
+
+    <!-- Echo's own knobs: a panel, so the list keeps the whole screen when they are closed. -->
+    <EchoFilters bind:open={filtersOpen} />
 
     {#if facet === "echo"}
       <EchoList onopen={(row) => onopen?.(row)} onopentrader={(trader) => onopentrader?.(trader)} />

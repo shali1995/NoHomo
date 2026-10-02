@@ -26,7 +26,6 @@
     stopEchoStream,
     syncEchoMarkets
   } from "../../lib/api/echo.svelte.js";
-  import EchoFilters from "./EchoFilters.svelte";
 
   /** `onopen(row)` takes a row carrying an href; `onopentrader(trader)` a walletAddress. */
   let { onopen, onopentrader } = $props();
@@ -133,8 +132,6 @@
 </script>
 
 <div class="echo">
-  <EchoFilters />
-
   {#if echo.error && views.length > 0}
     <!-- The stream can fail while rows are still on screen; saying so beats rows that
          silently stopped moving. -->

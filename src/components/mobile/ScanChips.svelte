@@ -7,13 +7,14 @@
 <script>
   import CloseIcon from "../../icons/close.svelte";
   import ChainIcon from "../../icons/network-solana.svelte";
+  import GearIcon from "../../icons/settings.svelte";
 
   /**
    * The capture's left-hand button is the chain the list is on, not a filter glyph. Here it is
    * a mark rather than a control: this API's `Chain` enum has one value, `SOL`, so there is no
    * second chain for a picker to offer and nothing a press could change.
    */
-  let { views, active, onselect, onclear } = $props();
+  let { views, active, onselect, onclear, gear = null, ongear = null } = $props();
 </script>
 
 <div class="row">
@@ -32,9 +33,21 @@
         class="chip"
         class:chip--on={view.id === active}
         aria-pressed={view.id === active}
-        onclick={() => onselect?.(view.id)}
+        aria-haspopup={view.id === gear && view.id === active ? "dialog" : undefined}
+        aria-label={view.id === gear && view.id === active
+          ? `${view.label} — filters`
+          : undefined}
+        onclick={() => (view.id === active && view.id === gear ? ongear?.() : onselect?.(view.id))}
       >
         {view.label}
+        <!--
+          The gear is part of the chip it belongs to, and only while that chip is the one being
+          looked at: on any other it would offer a panel for a screen the reader is not on, and on
+          a chip that is not active a press means "show me this", not "set this up".
+        -->
+        {#if view.id === gear && view.id === active}
+          <GearIcon class="gear" />
+        {/if}
       </button>
     {/each}
   </div>
@@ -90,6 +103,9 @@
   }
 
   .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     flex: 0 0 auto;
     padding: 6px 8px;
     border: 1px solid var(--m-hairline);
@@ -99,6 +115,14 @@
     line-height: 20.3px;
     color: var(--m-muted);
     white-space: nowrap;
+  }
+
+  /* The gear reads as part of the label, so it takes the label's own weight and colour. */
+  .chip :global(.gear) {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    opacity: 0.75;
   }
 
   .chip--on {
