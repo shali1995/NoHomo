@@ -26,8 +26,11 @@
   import Liveline from "../../../lib/vendor/liveline/Liveline.svelte";
   import { getFrame, hasMoreCandles, loadOlderCandles } from "../../../lib/api/chart.svelte.js";
   import { formatCompact, formatPrice, getToken } from "../../../lib/api/token.svelte.js";
+  import { positionsFor } from "../../../lib/api/trade.svelte.js";
+  import { mobilePriceLevels } from "../../../lib/mobile-chart-levels.js";
+  import LiveLevels from "./LiveLevels.svelte";
 
-  let { candles = [], type = "candles", mode = "price" } = $props();
+  let { candles = [], type = "candles", mode = "price", address = "" } = $props();
 
   /** The channel's own frame names, in the seconds the library wants. */
   const FRAME_SECONDS = {
@@ -187,6 +190,26 @@
     lastTap = now;
   }
 
+  /* --- The account's own levels --------------------------------------------------------- */
+
+  /**
+   * The chart's own price -> y mapping, handed over by the library on every frame. It is
+   * deliberately not reactive state: it changes sixty times a second and nothing renders from it
+   * — the level lines read it from their own frame loop.
+   */
+  let layoutRef = null;
+
+  /**
+   * The trade's levels, in the rules the desktop keeps them in: which lines exist, what they are
+   * called, what a move must send back, and what each one is measured from.
+   */
+  const levels = $derived.by(() => {
+    const position = positionsFor(address)[0] ?? null;
+    // `market` is what a resting buy is clamped under, and the fallback anchor for a percent
+    // target on an order that has not filled yet — the desktop's own two uses for it.
+    return mobilePriceLevels(position, candles).map((level) => ({ ...level, market: newestPrice }));
+  });
+
   /**
    * Panning far enough back asks for another page. The module pages 300 candles at a time and
    * guards itself against asking twice, so this only has to notice the approach.
@@ -236,7 +259,10 @@
     formatValue={formatAmount}
     formatTime={timeLabel}
     emptyText=""
+    onLayout={(next) => (layoutRef = next)}
   />
+
+  <LiveLevels {address} {levels} layout={() => layoutRef} />
 </div>
 
 <style>

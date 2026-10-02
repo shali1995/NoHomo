@@ -188,6 +188,8 @@ export function mobilePriceLevels(position, candles) {
     levels.push({
       // the swap id *is* the identity of a resting buy; the cancel call takes exactly this
       key: `dip:${dip.swapId ?? dip.id}`,
+      // the id the move call takes; an order the engine gave none cannot be moved at all
+      swapId: dip.swapId ?? null,
       kind: "dip",
       price: dipPrice,
       // the trade's own tag and pill label, the words the position card already shows
@@ -220,6 +222,9 @@ export function mobilePriceLevels(position, candles) {
       // `config:N` ids on an unfilled order are not server ids: stable per plan order, so the
       // row keeps its identity across reads, and the desktop offers those rows no move either.
       key: `target:${target.id}`,
+      // what the move call takes, and whether this one has already fired
+      targetId: target.id ?? null,
+      met: target.met === true,
       kind: isStop ? "stopLoss" : "takeProfit",
       price,
       label: target.tag ?? (isStop ? "SL" : "TP"),

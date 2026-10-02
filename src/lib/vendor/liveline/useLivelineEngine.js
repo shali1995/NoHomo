@@ -1009,6 +1009,8 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
                 toX: (t) => pad.left + ((t - leftEdge) / (rightEdge - leftEdge)) * chartW,
                 toY: (v) => pad.top + (1 - (v - minVal) / valRange) * chartH,
             };
+            // Local patch: whoever draws over this canvas needs the same coordinates.
+            cfg.onLayout?.(layout);
             // --- Hover + scrub ---
             const hoverPx = hoverXRef.current;
             let hoveredCandle = null;
@@ -1433,6 +1435,8 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
                 toX: (t) => pad.left + ((t - leftEdge) / (rightEdge - leftEdge)) * chartW,
                 toY: (v) => pad.top + (1 - (v - minVal) / valRange) * chartH,
             };
+            // Local patch: whoever draws over this canvas needs the same coordinates.
+            cfg.onLayout?.(layout);
             // Particles: each series is its own emitter, judged on its own swing.
             if (cfg.degenOptions) {
                 const states = multiParticleStatesRef.current;
@@ -1632,6 +1636,8 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
                 toX: (t) => pad.left + ((t - leftEdge) / (rightEdge - leftEdge)) * chartW,
                 toY: (v) => pad.top + (1 - (v - minVal) / valRange) * chartH,
             };
+            // Local patch: whoever draws over this canvas needs the same coordinates.
+            cfg.onLayout?.(layout);
             // Momentum
             const momentum = cfg.momentumOverride ?? detectMomentum(visible);
             // Hover + scrub
