@@ -4,6 +4,7 @@
   256 dp header that stays put over a list that scrolls beneath it.
 -->
 <script>
+  import Logo from "../../../icons/logo.svelte";
   import Mark from "../../../icons/nohomo.svelte";
   import TraderRail from "../TraderRail.svelte";
   import HomeTabs from "../HomeTabs.svelte";
@@ -138,6 +139,8 @@
 <div class="home">
   <div class="brand">
     <Mark class="h-10 w-10" />
+    <!-- the wordmark beside the mark, as the welcome carries it -->
+    <Logo class="wordmark" />
   </div>
 
   <header class="head">
@@ -220,9 +223,16 @@
   .brand {
     display: flex;
     align-items: center;
+    gap: 10px;
     flex: 0 0 auto;
     height: 64px;
     padding: calc(24px + env(safe-area-inset-top)) 16px 0 16px;
+  }
+
+  /* NOHOMO, at the height the mark beside it reads against (the svg is 118x24). */
+  .brand :global(.wordmark) {
+    width: auto;
+    height: 21px;
   }
 
   .head {
