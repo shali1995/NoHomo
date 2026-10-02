@@ -25,7 +25,7 @@
 <script>
   import Liveline from "../../../lib/vendor/liveline/Liveline.svelte";
   import { getFrame, hasMoreCandles, loadOlderCandles } from "../../../lib/api/chart.svelte.js";
-  import { formatCompact, formatPrice } from "../../../lib/api/token.svelte.js";
+  import { formatCompact, formatPrice, getToken } from "../../../lib/api/token.svelte.js";
 
   let { candles = [], type = "candles", mode = "price" } = $props();
 
@@ -83,11 +83,48 @@
   const last = $derived(series.length > 0 ? series[series.length - 1].close : 0);
 
   /**
-   * The newest candle is the one still forming, and the library wants it apart: it is what the
-   * live dot tracks. Nothing is still forming in the past, so a panned chart passes none.
+   * The price the market is on right now — the same figure the header prints, fed by the
+   * price socket. The candle series only grows when a candle *closes*, so this is what makes
+   * the candle still forming move between closes, the way a trading chart does.
    */
-  const committed = $derived(series.length > 1 ? series.slice(0, -1) : series);
-  const live = $derived(away || series.length === 0 ? undefined : series[series.length - 1]);
+  const livePrice = $derived(Number(getToken()?.quote?.priceUsdStr ?? 0) || 0);
+
+  /** The bucket the clock is inside, in the frame's own seconds. */
+  const bucketStart = (seconds) => Math.floor(seconds / frameSeconds) * frameSeconds;
+
+  /**
+   * The candle still forming. When the series' newest candle is the bucket we are inside it is
+   * that candle and it grows; when the market has already moved past it, it is a new bucket
+   * opening at the live price. `committed` is everything before it — the library wants the
+   * forming candle apart, because that is what its live dot and its smooth open/high/low/close
+   * interpolation work on.
+   */
+  const liveCandle = $derived.by(() => {
+    if (series.length === 0) return undefined;
+    const newest = series[series.length - 1];
+    const price = livePrice > 0 ? livePrice : newest.close;
+    if (bucketStart(Date.now() / 1000) === bucketStart(newest.time)) {
+      return {
+        time: newest.time,
+        open: newest.open,
+        high: Math.max(newest.high, price),
+        low: Math.min(newest.low, price),
+        close: price
+      };
+    }
+    const start = bucketStart(Date.now() / 1000);
+    return { time: start, open: price, high: price, low: price, close: price };
+  });
+
+  /** The series' own newest candle is the forming one only while it is still the live bucket. */
+  const forming = $derived(
+    series.length > 0 && bucketStart(Date.now() / 1000) === bucketStart(series[series.length - 1].time)
+  );
+  const committed = $derived(forming ? series.slice(0, -1) : series);
+  /** Nothing is still forming in the past, so a panned chart passes no live candle. */
+  const live = $derived(away ? undefined : liveCandle);
+  /** The figures the tip follows: the market's price, not the last candle's close. */
+  const newestPrice = $derived(livePrice > 0 ? livePrice : last);
 
   /** The price, or the market cap: the axis this page keeps the chart on. */
   function formatAmount(amount) {
@@ -172,7 +209,7 @@
 >
   <Liveline
     data={closes}
-    value={last}
+    value={newestPrice}
     color="#04c249"
     theme="dark"
     grid
@@ -187,15 +224,15 @@
     scrub
     mode="candle"
     candles={committed}
-    {live}
+    liveCandle={live}
     candleWidth={frameSeconds}
     lineMode={type === "line"}
     lineData={closes}
-    lineValue={last}
+    lineValue={newestPrice}
     window={windowSeconds}
     viewOffset={panSeconds}
     paused={away}
-    referenceLine={{ value: last, label: formatAmount(last) }}
+    referenceLine={{ value: newestPrice, label: formatAmount(newestPrice) }}
     formatValue={formatAmount}
     formatTime={timeLabel}
     emptyText=""
