@@ -1,43 +1,69 @@
 <!--
   The account's own levels over the token chart: the resting buy, the take profits, the stops.
 
-  They are HTML over the canvas rather than drawn by the chart library, which is how the desktop
-  does it too — the difference is that the desktop gets its mapping from
-  `candleSeries.priceToCoordinate` and here it comes from `onLayout`, the one prop the vendored
-  library was given. Everything else is ours: this file reads the mapping, places each line at its
-  own price, and drags it.
+  HTML over the canvas rather than drawn by the chart library, which is how the desktop does it
+  too — the difference is that the desktop reads its mapping from `candleSeries.priceToCoordinate`
+  and here it comes from `onLayout`, the one prop the vendored library was given.
 
-  The mapping is not reactive state on purpose. It is rebuilt by the library on every animation
-  frame, and a line that is placed from a frame-old value shimmers against the candles it belongs
-  to — so a rAF loop here reads it and writes the positions straight onto the elements.
+  The mapping is deliberately not reactive state: the library rebuilds it on every animation frame,
+  and a line positioned from a frame-old value shimmers against the candles it belongs to. So a
+  frame loop here reads it and writes positions straight onto the elements.
 
-  The rules for which levels exist, what they are called, what they may be dragged to and what a
-  move has to send back are `mobilePriceLevels` (src/lib/mobile-chart-levels.js) — the same rules
-  the desktop keeps, ported once, in one place. This file is the gesture and the paint.
+  The gesture has two steps, because a chart and a line on it cannot both be grabbed by one press:
+
+    1. press the level's box and it is taken: the box grows, its rule goes solid, it grows a pair
+       of up/down marks and a halo, and it ticks;
+    2. then drag anywhere on the plot and that level follows your finger, inside its own bounds.
+
+  It stays in hand after a drag. Letting go of it — a tap anywhere off the box — releases it, and a
+  level that was never moved goes back to the price it came from. While a level is in hand the
+  chart's own panning stands down (the chart asks this file first), so a press can never mean both.
+
+  Which levels exist, what each is measured from and what a move sends back are `mobilePriceLevels`
+  in `mobile-chart-levels.js`; how a press, a drag and a release are decided is
+  `mobile-level-gesture.js`, kept out of here so it can be checked without a browser. This file is
+  the touch, the paint and the two API calls.
 -->
 <script>
   import { formatPrice } from "../../../lib/api/token.svelte.js";
   import { moveDipLevel, moveTargetLevel } from "../../../lib/api/trade.svelte.js";
+  import {
+    clampPrice,
+    levelAt,
+    levelBounds,
+    levelCall,
+    levelDistance,
+    priceFromY,
+    releaseDecision
+  } from "../../../lib/mobile-level-gesture.js";
 
-  let { address = "", levels = [], layout = () => null } = $props();
+  let {
+    address = "",
+    levels = [],
+    layout = () => null,
+    gesture = { hit: null, blocked: false }
+  } = $props();
 
-  /** The canvas' own colours, since a CSS variable cannot be read from a canvas or a mixin. */
+  /** The canvas has no CSS variables, so a level's tone is a colour of its own here. */
   const COLOURS = { dip: "#4662fb", takeProfit: "#04c249", stopLoss: "#ff5121" };
-  /** How near a line a finger has to land, in dp. A mouse cursor gets 7 on the desktop. */
-  const GRAB = 22;
   /** How long a refused level takes to slide home, in ms. */
   const SETTLE_MS = 150;
 
-  /** The line elements, by level key, so the frame loop can write to them without re-rendering. */
+  /** The line elements by key, so the frame loop can write to them without re-rendering. */
   let rows = new Map();
-  /** The value under the finger, by key: the frame loop reads this instead of the level's own. */
+  /** The level in hand. `null` when nothing is taken. */
+  let armed = $state(null);
+  /** The value under the finger — a proposal until the API has been told. */
   let held = $state(null);
-  /** What the readout shows while a line is in hand. */
+  /** What the readout reads while a level is in hand. */
   let readout = $state(null);
-  let dragging = null;
+  /** The press in progress: what is being moved, and how far it has travelled. */
+  let press = null;
   let frame = 0;
 
   const colourOf = (level) => COLOURS[level.kind] ?? "#9899a3";
+  const valueOf = (level) => (held?.key === level.key ? held.price : level.price);
+  const armedLevel = () => (armed ? levels.find((level) => level.key === armed) ?? null : null);
 
   function bindRow(node, level) {
     rows.set(level.key, node);
@@ -48,116 +74,80 @@
     };
   }
 
-  /** A finger's y as a price, off the library's own scale. */
-  function priceAt(y) {
-    const box = layout();
-    if (!box) return 0;
-    const { pad, chartH, minVal, maxVal } = box;
-    if (!(chartH > 0)) return 0;
-    return maxVal - ((y - pad.top) / chartH) * (maxVal - minVal);
-  }
-
-  /** Where a level may be dragged to: the desktop's own clamps. */
-  function boundsOf(level, market) {
-    if (level.kind === "dip") return { min: 0, max: market };
-    if (level.kind === "stopLoss") return { min: 0, max: level.entry };
-    if (level.kind === "takeProfit") return { min: level.entry, max: Number.MAX_SAFE_INTEGER };
-    return { min: 0, max: Number.MAX_SAFE_INTEGER };
-  }
-
-  const valueOf = (level) => (held?.key === level.key ? held.price : level.price);
-
-  /**
-   * The frame loop: place every line at its own price, and a line whose level is off the plot is
-   * held at the edge it left by, where its pill says so.
-   */
-  function place() {
-    const box = layout();
-    if (box) {
-      for (const level of levels) {
-        const node = rows.get(level.key);
-        if (!node) continue;
-        const y = box.toY(valueOf(level));
-        const inside = Number.isFinite(y) && y >= 0 && y <= box.h;
-        const at = Math.min(Math.max(y, 6), box.h - 6);
-        node.style.transform = `translateY(${at}px)`;
-        node.dataset.off = inside ? "" : "true";
-      }
-      if (dragging) {
-        const node = rows.get(dragging.level.key);
-        readout = node
-          ? { level: dragging.level, price: valueOf(dragging.level), y: Math.min(Math.max(box.toY(valueOf(dragging.level)), 6), box.h - 6) }
-          : null;
-      }
-    }
-    frame = requestAnimationFrame(place);
-  }
-
-  $effect(() => {
-    frame = requestAnimationFrame(place);
-    return () => cancelAnimationFrame(frame);
-  });
-
-  /** The level nearest a finger, if it is within reach — and only one this API can move. */
-  function levelAt(y) {
-    const box = layout();
-    if (!box) return null;
-    let best = null;
-    let bestDistance = GRAB;
-    for (const level of levels) {
-      if (!level.movable) continue;
-      const lineY = box.toY(valueOf(level));
-      if (!Number.isFinite(lineY)) continue;
-      const distance = Math.abs(lineY - y);
-      if (distance <= bestDistance) {
-        best = level;
-        bestDistance = distance;
-      }
-    }
-    return best;
+  /** The plot this overlay sits on: what a y is measured from, and how tall it is. */
+  function hostOf(node) {
+    return node?.closest(".chart") ?? node?.parentElement ?? null;
   }
 
   function tick(ms) {
     navigator.vibrate?.(ms);
   }
 
-  /** How far the line has been taken from what it is measured against, as a signed percent. */
-  function distance(level, price) {
-    const anchor = level.kind === "dip" ? level.market : level.entry > 0 ? level.entry : level.market;
-    if (!(anchor > 0) || !(price > 0)) return "";
-    const pct = (price / anchor - 1) * 100;
-    return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+  /** Capture is taken by whichever element took the press, so it is given back by the same one. */
+  function release(element, pointerId) {
+    try {
+      element?.releasePointerCapture?.(pointerId);
+    } catch {
+      // it never held the pointer: nothing to give back
+    }
   }
 
-  function down(event) {
-    const host = event.currentTarget.parentElement;
-    if (!host) return;
-    const box = host.getBoundingClientRect();
-    const y = event.clientY - box.top;
-    const level = levelAt(y);
-    if (!level) return;
-    // The chart's own pan and zoom must not take this drag: the desktop switches its scroll and
-    // scale handling off for the length of a drag for the same reason.
-    event.stopPropagation();
-    event.preventDefault();
-    dragging = { level, bounds: boundsOf(level, level.market), start: level.price };
+  function take(level) {
+    armed = level.key;
     held = { key: level.key, price: level.price };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    gesture.blocked = true;
     tick(8);
   }
 
-  function move(event) {
-    if (!dragging) return;
+  function letGo() {
+    armed = null;
+    held = null;
+    press = null;
+    readout = null;
+    gesture.blocked = false;
+  }
+
+  /** A press on a level's own box: take it, and be ready to drag it in the same motion. */
+  function boxDown(event) {
+    const host = hostOf(event.currentTarget);
+    const box = layout();
+    if (!host || !box) return;
+    const y = event.clientY - host.getBoundingClientRect().top;
+    const level = levelAt(levels, y, box.toY);
+    if (!level) return;
+    // The chart listens first, on the way down: it must not take this press for its own panning.
     event.stopPropagation();
     event.preventDefault();
-    const host = event.currentTarget.parentElement;
-    if (!host) return;
+    take(level);
+    press = { level, from: level.price, moved: false, y: event.clientY, onBox: true, holder: event.currentTarget };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  /** A press anywhere else while a level is in hand: the release path, and the drag itself. */
+  function plotDown(event) {
+    const level = armedLevel();
+    if (!level) return;
+    // Was the press on the box itself, or off it? Off it and never moved means let go.
+    const onBox = !!(event.target instanceof Element && event.target.closest(".line"));
+    event.stopPropagation();
+    press = { level, from: level.price, moved: false, y: event.clientY, onBox, holder: event.currentTarget };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function move(event) {
+    if (!press) return;
+    event.stopPropagation();
+    event.preventDefault();
+    if (!press.moved && Math.abs(event.clientY - press.y) < 6) return;
+    press.moved = true;
+    const host = hostOf(event.currentTarget);
+    const box = layout();
+    if (!host || !box) return;
     const y = event.clientY - host.getBoundingClientRect().top;
-    const { level, bounds } = dragging;
-    const wanted = Math.min(Math.max(priceAt(y), bounds.min), bounds.max);
+    const { level } = press;
+    const wanted = clampPrice(priceFromY(y, box), levelBounds(level));
     if (!(wanted > 0)) return;
     held = { key: level.key, price: wanted };
-    readout = { level, price: wanted, y };
   }
 
   /** A refused move slides home rather than jumping, so the refusal is visible. */
@@ -178,72 +168,136 @@
   }
 
   async function up(event) {
-    if (!dragging) return;
+    if (!press) return;
     event.stopPropagation();
-    const { level, start } = dragging;
-    const landed = held?.key === level.key ? held.price : start;
-    dragging = null;
-    readout = null;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    if (Math.abs(landed - start) < 1e-12) {
-      held = null;
+    const { level, from, moved, onBox, holder } = press;
+    press = null;
+    release(holder, event.pointerId);
+
+    // A tap: off the box it lets the level go, and a level that was never moved goes home.
+    if (releaseDecision({ moved, onBox }) === "release") {
+      letGo();
       return;
     }
+    // A tap on the box keeps it in hand, and sends nothing.
+    if (!moved) return;
+
+    const landed = held?.key === level.key ? held.price : from;
+    const call = levelCall(level, landed, from);
+    if (!call) return;
     tick(12);
-    let moved = false;
+    let done = false;
     try {
-      if (level.kind === "dip" && level.swapId != null) {
-        moved = await moveDipLevel({ address, swapId: level.swapId, priceUsd: landed });
-      } else if (level.targetId != null && level.entry > 0) {
-        // The percent a target is stored as, measured from the entry — the desktop's own sum.
-        const changePct = Number(Math.abs((landed / level.entry - 1) * 100).toFixed(3));
-        moved = await moveTargetLevel({
-          address,
-          id: level.targetId,
-          kind: level.kind === "stopLoss" ? "STOP_LOSS" : "TAKE_PROFIT",
-          sellPct: level.sellPct,
-          changePct
-        });
-      }
+      done = call.kind === "dip"
+        ? await moveDipLevel({ address, ...call.args })
+        : await moveTargetLevel({ address, ...call.args });
     } catch {
-      moved = false;
+      done = false;
     }
-    if (moved) held = null;
-    else settle(level.key, landed, start);
+    // Committed or refused, the level stays in hand — the finger's business is done, the selection
+    // is not. A refusal is shown by sliding back.
+    if (!done) settle(level.key, landed, from);
   }
+
+  /**
+   * The frame loop: place every line at its own price. A level outside the plot waits at the edge
+   * it left by, dimmed, where its box says so, rather than being drawn nowhere.
+   */
+  function place() {
+    const box = layout();
+    if (box) {
+      for (const level of levels) {
+        const node = rows.get(level.key);
+        if (!node) continue;
+        const y = box.toY(valueOf(level));
+        const inside = Number.isFinite(y) && y >= 0 && y <= box.h;
+        node.style.transform = `translateY(${Math.min(Math.max(y, 6), box.h - 6)}px)`;
+        node.dataset.off = inside ? "" : "true";
+      }
+      const level = armedLevel();
+      if (level) {
+        const y = box.toY(valueOf(level));
+        readout = Number.isFinite(y)
+          ? {
+              level,
+              colour: colourOf(level),
+              price: valueOf(level),
+              delta: levelDistance(level, valueOf(level)),
+              y: Math.min(Math.max(y, 22), box.h - 22)
+            }
+          : null;
+      }
+    }
+    frame = requestAnimationFrame(place);
+  }
+
+  $effect(() => {
+    // The chart asks these before it takes a press for its own panning: `hit` for whether the press
+    // landed on a line, `blocked` for whether a level is already in hand.
+    gesture.hit = (y) => levelAt(levels, y, layout()?.toY, 30);
+    gesture.blocked = armed !== null;
+    frame = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(frame);
+  });
 </script>
 
-<div class="levels">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="levels"
+  class:levels--armed={armed !== null}
+  onpointerdown={plotDown}
+  onpointermove={move}
+  onpointerup={up}
+  onpointercancel={up}
+>
   {#each levels as level (level.key)}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="line"
-      class:line--grabbed={held?.key === level.key}
-      class:line--met={level.met}
+      class:line--in-hand={armed === level.key}
+      class:line--fired={level.met}
       use:bindRow={level}
       style="--tone: {colourOf(level)}"
-      data-kind={level.kind}
       role={level.movable ? "slider" : "presentation"}
       aria-label={level.label}
-      aria-valuenow={level.movable ? Math.round(level.price * 1e9) / 1e9 : undefined}
       tabindex={level.movable ? 0 : -1}
-      onpointerdown={level.movable ? down : undefined}
-      onpointermove={level.movable ? move : undefined}
-      onpointerup={level.movable ? up : undefined}
-      onpointercancel={level.movable ? up : undefined}
+      onpointerdown={level.movable ? boxDown : undefined}
     >
       <span class="rule"></span>
-      <span class="tag" style="background: {colourOf(level)}">{level.label}</span>
-      <span class="price m-num">
-        {level.kind === "dip" ? `$${formatPrice(level.price)}` : `${level.sellPct}% @ $${formatPrice(level.price)}`}
+      <span class="box">
+        {#if armed === level.key}
+          <span class="grip" aria-hidden="true">
+            <svg viewBox="0 0 10 6" fill="none"
+              ><path
+                d="M1 5L5 1L9 5"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              /></svg
+            >
+            <svg viewBox="0 0 10 6" fill="none"
+              ><path
+                d="M1 1L5 5L9 1"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              /></svg
+            >
+          </span>
+        {/if}
+        <span class="tag">{level.label}</span>
+        <span class="price m-num">${formatPrice(valueOf(level))}</span>
       </span>
     </div>
   {/each}
 
   {#if readout}
-    <div class="readout" style="top: {readout.y}px; --tone: {colourOf(readout.level)}">
+    <div class="readout" style="top: {readout.y}px; --tone: {readout.colour}">
       <span class="readout-name">{readout.level.label}</span>
       <span class="readout-price m-num">${formatPrice(readout.price)}</span>
-      <span class="readout-delta m-num">{distance(readout.level, readout.price)}</span>
+      <span class="readout-delta m-num">{readout.delta}</span>
     </div>
   {/if}
 </div>
@@ -252,14 +306,19 @@
   .levels {
     position: absolute;
     inset: 0;
-    /* Only the lines themselves take a pointer: the chart underneath keeps its own gestures. */
+    /* Only the boxes take a press until a level is in hand; then the whole plot is the surface. */
     pointer-events: none;
     overflow: hidden;
   }
 
+  .levels--armed {
+    pointer-events: auto;
+    touch-action: none;
+  }
+
   /*
-   * One level. The visible rule is a hairline, but the element is a finger's width tall so it can
-   * actually be grabbed — 22 dp above and below, which is what a touch target needs.
+   * One level. The rule is a hairline, but the element is a finger's width tall so the line itself
+   * can be pressed — 22 dp either side, which is what a touch target needs.
    */
   .line {
     position: absolute;
@@ -268,65 +327,107 @@
     right: 0;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 6px;
     height: 44px;
     margin-top: -22px;
     padding: 0 8px;
     pointer-events: none;
+    touch-action: none;
   }
 
   .line[role="slider"] {
     pointer-events: auto;
-    touch-action: none;
     cursor: ns-resize;
   }
 
   .rule {
     flex: 1 1 auto;
     height: 1px;
-    background: repeating-linear-gradient(
-      to right,
-      var(--tone) 0 4px,
-      transparent 4px 8px
-    );
+    margin-right: 6px;
+    background: repeating-linear-gradient(to right, var(--tone) 0 4px, transparent 4px 8px);
     opacity: 0.75;
   }
 
-  /* A target that has already fired is history, not a plan: the desktop draws it solid. */
-  .line--met .rule {
+  /* A target that already fired is history rather than a plan: the desktop draws it solid. */
+  .line--fired .rule {
     background: var(--tone);
     opacity: 0.5;
   }
 
-  .line--grabbed .rule {
+  /* In hand: the rule goes solid and thickens, and the box lifts off the chart. */
+  .line--in-hand .rule {
     height: 2px;
-    opacity: 1;
     background: var(--tone);
+    opacity: 1;
+  }
+
+  .box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 6px;
+    border: 1px solid var(--m-hairline);
+    border-radius: 6px;
+    background: var(--m-bg);
+  }
+
+  .line--in-hand .box {
+    gap: 8px;
+    padding: 5px 9px;
+    border-color: var(--tone);
+    border-radius: 9px;
+    background: var(--m-card-2);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--tone) 22%, transparent),
+      0 8px 20px rgba(0, 0, 0, 0.5);
+  }
+
+  /* The up/down marks: only a level in hand has them, and they are what says "drag me". */
+  .grip {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 10px;
+    color: var(--tone);
+  }
+
+  .grip svg {
+    display: block;
+    width: 10px;
+    height: 6px;
   }
 
   .tag {
-    flex: 0 0 auto;
     padding: 1px 5px;
     border-radius: 4px;
+    background: var(--tone);
     font-size: 10px;
     font-weight: 700;
     line-height: 12px;
     color: #060510;
   }
 
+  .line--in-hand .tag {
+    padding: 2px 6px;
+    font-size: 11px;
+    line-height: 13px;
+  }
+
   .price {
-    flex: 0 0 auto;
     font-size: 11px;
     color: var(--m-muted);
   }
 
-  .line--grabbed .price {
+  .line--in-hand .price {
+    font-size: 13px;
+    font-weight: 600;
     color: var(--m-text);
   }
 
-  /* A level outside the plot is held at the edge it left by, dimmed, rather than drawn nowhere. */
+  /* A level outside the plot waits at the edge it left by, dimmed, rather than nowhere. */
   .line[data-off="true"] .rule,
-  .line[data-off="true"] .price {
+  .line[data-off="true"] .box {
     opacity: 0.4;
   }
 

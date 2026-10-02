@@ -154,8 +154,14 @@
   }
 
   function down(event) {
+    if (!box) return;
+    // This runs on the way down, before the overlay sees anything. A level in hand, or a press
+    // that landed on one, is the overlay's gesture: if the chart took it instead, it would pan
+    // and the level could never be picked up.
+    if (gesture.blocked || gesture.hit?.(event.clientY - box.getBoundingClientRect().top)) return;
+
     // Only touch pans: on a pointer device liveline's own hover scrubbing stays the gesture.
-    if (event.pointerType !== "touch" || !box) return;
+    if (event.pointerType !== "touch") return;
     event.stopPropagation();
     drag = { x: event.clientX, y: event.clientY, pan: panSeconds, zoom, moved: false };
   }
@@ -198,6 +204,14 @@
    * — the level lines read it from their own frame loop.
    */
   let layoutRef = null;
+
+  /**
+   * What the level overlay owns, asked before this handler — which runs in the capture phase, so
+   * it sees every press first — decides to pan. Without it a press on a level pans the chart and
+   * the level is never picked up: `hit` says a press landed on a line, `blocked` says one is
+   * already in hand.
+   */
+  const gesture = { hit: null, blocked: false };
 
   /**
    * The trade's levels, in the rules the desktop keeps them in: which lines exist, what they are
@@ -262,7 +276,7 @@
     onLayout={(next) => (layoutRef = next)}
   />
 
-  <LiveLevels {address} {levels} layout={() => layoutRef} />
+  <LiveLevels {address} {levels} {gesture} layout={() => layoutRef} />
 </div>
 
 <style>
