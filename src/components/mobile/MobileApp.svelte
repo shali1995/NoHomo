@@ -5,6 +5,7 @@
 -->
 <script>
   import MobileNav from "./MobileNav.svelte";
+  import OrderIsland from "./OrderIsland.svelte";
   import ToastContainer from "../ToastContainer.svelte";
   import Portal from "../Portal.svelte";
   import HomeScreen from "./screens/HomeScreen.svelte";
@@ -105,6 +106,12 @@
   <!-- The notices are the desktop pair's own component: an order that fails on a phone has
        to say so somewhere, and its placement (bottom centre, above the bar) already reads
        on a phone. -->
+  <!-- The order pill rides above every screen and every sheet: an order can be placed from any of
+       them, and the one thing it must never do is get lost behind what placed it. -->
+  <Portal>
+    <OrderIsland />
+  </Portal>
+
   <Portal>
     <ToastContainer />
   </Portal>
