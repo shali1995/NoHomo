@@ -1,0 +1,543 @@
+<script lang="ts">
+  import { onDestroy, tick, untrack } from 'svelte'
+
+  import { defaultFormatTime, defaultFormatValue } from './format'
+  import { mountLivelineEngine, type LivelineEngineController } from './useLivelineEngine'
+  import { resolveSeriesPalettes, resolveTheme, SERIES_COLORS } from './theme'
+  import type { DegenOptions, LivelineProps, LivelineSeries, Momentum } from './types'
+
+  let {
+    data,
+    value,
+    series: seriesProp,
+    theme = 'dark',
+    color = '#3b82f6',
+    window: windowSecs = 30,
+    grid = true,
+    badge = true,
+    momentum = true,
+    fill = true,
+    scrub = true,
+    loading = false,
+    paused = false,
+    viewOffset = 0,
+    emptyText,
+    exaggerate = false,
+    degen: degenProp,
+    badgeTail = true,
+    badgeVariant = 'default',
+    showValue = false,
+    valueMomentumColor = false,
+    windows,
+    onWindowChange,
+    windowStyle,
+    orderbook,
+    referenceLine,
+    formatValue = defaultFormatValue,
+    formatTime = defaultFormatTime,
+    lerpSpeed = 0.08,
+    padding: paddingOverride,
+    onHover,
+    cursor = 'crosshair',
+    pulse = true,
+    mode = 'line',
+    candles,
+    candleWidth,
+    liveCandle,
+    lineMode,
+    lineData,
+    lineValue,
+    onModeChange,
+    onSeriesToggle,
+    showSeriesToggle: showSeriesToggleProp = true,
+    seriesToggleCompact = false,
+    lineWidth,
+    class: className = '',
+    ...rest
+  }: LivelineProps = $props()
+
+  let canvasEl: HTMLCanvasElement | null = $state(null)
+  let containerEl: HTMLDivElement | null = $state(null)
+  let valueDisplayEl: HTMLSpanElement | null = $state(null)
+  let windowBarEl: HTMLDivElement | null = $state(null)
+  let modeBarEl: HTMLDivElement | null = $state(null)
+  let indicatorStyle = $state<{ left: number; width: number } | null>(null)
+  let modeIndicatorStyle = $state<{ left: number; width: number } | null>(null)
+  let hiddenSeriesIds = $state<string[]>([])
+  let activeWindowSecs = $state(untrack(() => windows?.[0]?.secs ?? windowSecs))
+  let lastSeriesProp: LivelineSeries[] = $state.raw(untrack(() => seriesProp ?? []))
+
+  let controller: LivelineEngineController | null = null
+
+  let isDark = $derived(theme === 'dark')
+  let ws = $derived(windowStyle ?? 'default')
+  let activeMode = $derived(mode === 'line' || lineMode ? 'line' : 'candle')
+  let isMultiSeries = $derived((seriesProp?.length ?? 0) > 0)
+  let showSeriesToggle = $derived(showSeriesToggleProp && lastSeriesProp.length > 1)
+  let showBadge = $derived(badge && !isMultiSeries)
+  let showMomentum = $derived(momentum !== false)
+  let momentumOverride = $derived(typeof momentum === 'string' ? momentum : undefined)
+  // The right gutter holds whatever is drawn past the chart's edge, so it is
+  // sized by what is actually shown: the value badge, else grid labels, else
+  // just breathing room.
+  let defaultRight = $derived.by(() => {
+    if (showBadge) return 80
+    return grid ? 54 : 12
+  })
+  let effectiveWindowSecs = $derived(windows?.length ? activeWindowSecs : windowSecs)
+  let cursorStyle = $derived(scrub ? cursor : 'default')
+  let hiddenSeriesSet = $derived(new Set(hiddenSeriesIds))
+  let activeColor = $derived(isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)')
+  let inactiveColor = $derived(isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.22)')
+
+  let palette = $derived.by(() => {
+    const resolved = resolveTheme(color, theme)
+    return lineWidth == null ? resolved : { ...resolved, lineWidth }
+  })
+
+  let seriesPalettes = $derived.by(() => {
+    if (!seriesProp?.length) return null
+    const palettes = resolveSeriesPalettes(seriesProp, theme)
+    if (lineWidth != null) {
+      for (const seriesPalette of palettes.values()) {
+        seriesPalette.lineWidth = lineWidth
+      }
+    }
+    return palettes
+  })
+
+  let multiSeries = $derived.by(() => {
+    if (!seriesProp || !seriesPalettes) return
+    return seriesProp.map((series, index) => ({
+      id: series.id,
+      data: series.data,
+      value: series.value,
+      palette:
+        seriesPalettes.get(series.id) ??
+        resolveTheme(series.color || SERIES_COLORS[index % SERIES_COLORS.length], theme),
+      label: series.label,
+    }))
+  })
+
+  let pad = $derived({
+    top: paddingOverride?.top ?? 12,
+    right: paddingOverride?.right ?? defaultRight,
+    bottom: paddingOverride?.bottom ?? 28,
+    left: paddingOverride?.left ?? 12,
+  })
+
+  let degenOptions = $derived.by(() => {
+    if (degenProp == null || degenProp === false) return
+    return typeof degenProp === 'object' ? degenProp : ({} satisfies DegenOptions)
+  })
+
+  function findButton(bar: HTMLDivElement | null, selector: string) {
+    return bar?.querySelector<HTMLButtonElement>(selector) ?? null
+  }
+
+  function updateWindowIndicator() {
+    const button = findButton(windowBarEl, `[data-window-secs="${activeWindowSecs}"]`)
+    if (!button || !windowBarEl) {
+      indicatorStyle = null
+      return
+    }
+
+    const barRect = windowBarEl.getBoundingClientRect()
+    const buttonRect = button.getBoundingClientRect()
+    indicatorStyle = {
+      left: buttonRect.left - barRect.left,
+      width: buttonRect.width,
+    }
+  }
+
+  function updateModeIndicator() {
+    if (!onModeChange) {
+      modeIndicatorStyle = null
+      return
+    }
+
+    const button = findButton(modeBarEl, `[data-mode="${activeMode}"]`)
+    if (!button || !modeBarEl) {
+      modeIndicatorStyle = null
+      return
+    }
+
+    const barRect = modeBarEl.getBoundingClientRect()
+    const buttonRect = button.getBoundingClientRect()
+    modeIndicatorStyle = {
+      left: buttonRect.left - barRect.left,
+      width: buttonRect.width,
+    }
+  }
+
+  function handleSeriesToggle(id: string) {
+    if (hiddenSeriesIds.includes(id)) {
+      hiddenSeriesIds = hiddenSeriesIds.filter((seriesId) => seriesId !== id)
+      onSeriesToggle?.(id, true)
+      return
+    }
+
+    const visibleCount = seriesProp?.reduce(
+      (count, series) => count + (hiddenSeriesSet.has(series.id) ? 0 : 1),
+      0,
+    ) ?? 0
+    if (visibleCount <= 1) return
+
+    hiddenSeriesIds = [...hiddenSeriesIds, id]
+    onSeriesToggle?.(id, false)
+  }
+
+  function baseBarStyle() {
+    let background = 'transparent'
+    let padding = 0
+    if (ws !== 'text') {
+      background = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'
+      padding = ws === 'rounded' ? 3 : 2
+    }
+    return [
+      'position:relative',
+      'display:inline-flex',
+      `gap:${ws === 'text' ? 4 : 2}px`,
+      `background:${background}`,
+      `border-radius:${ws === 'rounded' ? 999 : 6}px`,
+      `padding:${padding}px`,
+    ].join(';')
+  }
+
+  function indicatorStyles(indicator: { left: number; width: number }) {
+    return [
+      'position:absolute',
+      `top:${ws === 'rounded' ? 3 : 2}px`,
+      `left:${indicator.left}px`,
+      `width:${indicator.width}px`,
+      `height:${ws === 'rounded' ? 'calc(100% - 6px)' : 'calc(100% - 4px)'}`,
+      `background:${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.035)'}`,
+      `border-radius:${ws === 'rounded' ? 999 : 4}px`,
+      'transition:left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+      'pointer-events:none',
+    ].join(';')
+  }
+
+  function windowButtonStyle(isActive: boolean) {
+    return [
+      'position:relative',
+      'z-index:1',
+      `font-size:11px`,
+      `padding:${ws === 'text' ? '2px 6px' : '3px 10px'}`,
+      `border-radius:${ws === 'rounded' ? 999 : 4}px`,
+      'border:none',
+      'cursor:pointer',
+      'font-family:system-ui, -apple-system, sans-serif',
+      `font-weight:${isActive ? 600 : 400}`,
+      'background:transparent',
+      `color:${isActive ? activeColor : inactiveColor}`,
+      'transition:color 0.2s, background 0.15s',
+      'line-height:16px',
+    ].join(';')
+  }
+
+  function modeButtonStyle() {
+    return [
+      'position:relative',
+      'z-index:1',
+      'padding:5px 7px',
+      `border-radius:${ws === 'rounded' ? 999 : 4}px`,
+      'border:none',
+      'cursor:pointer',
+      'background:transparent',
+      'display:flex',
+      'align-items:center',
+    ].join(';')
+  }
+
+  function seriesButtonStyle(isHidden: boolean) {
+    let padding: string
+    if (seriesToggleCompact) padding = ws === 'text' ? '2px 4px' : '5px 7px'
+    else padding = ws === 'text' ? '2px 6px' : '3px 8px'
+    let background = 'transparent'
+    if (!isHidden && ws !== 'text') {
+      background = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.035)'
+    }
+    return [
+      'position:relative',
+      'z-index:1',
+      'font-size:11px',
+      `padding:${padding}`,
+      `border-radius:${ws === 'rounded' ? 999 : 4}px`,
+      'border:none',
+      'cursor:pointer',
+      'font-family:system-ui, -apple-system, sans-serif',
+      'font-weight:500',
+      `background:${background}`,
+      `color:${isHidden ? inactiveColor : activeColor}`,
+      `opacity:${isHidden ? 0.4 : 1}`,
+      'transition:opacity 0.2s, background 0.15s, color 0.2s',
+      'line-height:16px',
+      'display:flex',
+      'align-items:center',
+      `gap:${seriesToggleCompact ? 0 : 4}px`,
+    ].join(';')
+  }
+
+  $effect(() => {
+    if (seriesProp?.length) {
+      lastSeriesProp = seriesProp
+    }
+  })
+
+  $effect(() => {
+    if (!windows?.length) return
+    if (windows.some((option) => option.secs === activeWindowSecs)) return
+    activeWindowSecs = windows[0].secs
+  })
+
+  $effect(() => {
+    // Track these inputs before the asynchronous indicator update.
+    void activeWindowSecs
+    void windows?.length
+    tick().then(updateWindowIndicator)
+  })
+
+  $effect(() => {
+    // Track these inputs before the asynchronous indicator update.
+    void activeMode
+    void onModeChange
+    tick().then(updateModeIndicator)
+  })
+
+  $effect(() => {
+    if (!windowBarEl) return
+    const observer = new ResizeObserver(() => updateWindowIndicator())
+    observer.observe(windowBarEl)
+    return () => observer.disconnect()
+  })
+
+  $effect(() => {
+    if (!modeBarEl || !onModeChange) return
+    const observer = new ResizeObserver(() => updateModeIndicator())
+    observer.observe(modeBarEl)
+    return () => observer.disconnect()
+  })
+
+  $effect(() => {
+    const canvas = canvasEl
+    const container = containerEl
+    if (!canvas || !container) return
+
+    const nextConfig = {
+      data,
+      value,
+      palette,
+      windowSecs: effectiveWindowSecs,
+      // Local patch: seconds the view has been dragged back from the live edge.
+      viewOffset: viewOffset ?? 0,
+      lerpSpeed,
+      showGrid: grid,
+      showBadge,
+      showMomentum: isMultiSeries ? false : showMomentum,
+      momentumOverride: momentumOverride as Momentum | undefined,
+      showFill: isMultiSeries ? false : fill,
+      referenceLine,
+      formatValue,
+      formatTime,
+      padding: pad,
+      onHover,
+      showPulse: pulse,
+      scrub,
+      exaggerate,
+      degenOptions,
+      badgeTail,
+      badgeVariant,
+      valueMomentumColor,
+      valueDisplayElement: showValue ? valueDisplayEl : null,
+      orderbookData: orderbook,
+      loading,
+      paused,
+      emptyText,
+      mode,
+      candles,
+      candleWidth,
+      liveCandle: liveCandle ?? undefined,
+      lineMode,
+      lineData,
+      lineValue,
+      multiSeries,
+      isMultiSeries,
+      hiddenSeriesIds: hiddenSeriesSet,
+    }
+
+    // Engine callbacks must not become dependencies of this configuration effect.
+    untrack(() => {
+      if (!controller) {
+        controller = mountLivelineEngine(canvas, container, nextConfig)
+        return
+      }
+
+      controller.update(nextConfig)
+    })
+  })
+
+  onDestroy(() => {
+    controller?.destroy()
+    controller = null
+  })
+</script>
+
+{#if showValue}
+  <span
+    bind:this={valueDisplayEl}
+    style="display:block;font-size:20px;font-weight:500;font-family:'SF Mono', Menlo, monospace;transition:color 0.3s;letter-spacing:-0.01em;margin-bottom:8px;padding-top:4px;"
+    style:color={`var(--liveline-momentum-color, ${isDark ? 'rgba(255,255,255,0.85)' : '#111'})`}
+    style:padding-left={`${pad.left}px`}
+  ></span>
+{/if}
+
+{#if (windows?.length ?? 0) > 0 || onModeChange || showSeriesToggle}
+  <div style={`display:flex;align-items:center;gap:6px;margin-bottom:6px;margin-left:${pad.left}px;`}>
+    {#if windows?.length}
+      <div bind:this={windowBarEl} style={baseBarStyle()}>
+        {#if ws !== 'text' && indicatorStyle}
+          <div style={indicatorStyles(indicatorStyle)}></div>
+        {/if}
+
+        {#each windows as option (option.secs)}
+          <button
+            type="button"
+            data-window-secs={option.secs}
+            aria-pressed={option.secs === activeWindowSecs}
+            onclick={() => {
+              activeWindowSecs = option.secs
+              onWindowChange?.(option.secs)
+            }}
+            style={windowButtonStyle(option.secs === activeWindowSecs)}
+          >
+            {option.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    {#if onModeChange}
+      <div bind:this={modeBarEl} style={baseBarStyle()}>
+        {#if ws !== 'text' && modeIndicatorStyle}
+          <div style={indicatorStyles(modeIndicatorStyle)}></div>
+        {/if}
+
+        <button
+          type="button"
+          aria-label="Show line chart"
+          aria-pressed={activeMode === 'line'}
+          data-mode="line"
+          onclick={() => onModeChange('line')}
+          style={modeButtonStyle()}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path
+              d="M1 8.5C2.5 8.5 3 4 5.5 4S7.5 7 8.5 7C9.5 7 10 3.5 11 3.5"
+              stroke={activeMode === 'line' ? activeColor : inactiveColor}
+              stroke-width={activeMode === 'line' ? 1.5 : 1.2}
+              stroke-linecap="round"
+              fill="none"
+            />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          aria-label="Show candlestick chart"
+          aria-pressed={activeMode === 'candle'}
+          data-mode="candle"
+          onclick={() => onModeChange('candle')}
+          style={modeButtonStyle()}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <line
+              x1="3.5"
+              y1="1"
+              x2="3.5"
+              y2="11"
+              stroke={activeMode === 'candle' ? activeColor : inactiveColor}
+              stroke-width="1"
+            />
+            <rect
+              x="2"
+              y="3"
+              width="3"
+              height="5"
+              rx="0.5"
+              fill={activeMode === 'candle' ? activeColor : inactiveColor}
+            />
+            <line
+              x1="8.5"
+              y1="2"
+              x2="8.5"
+              y2="10"
+              stroke={activeMode === 'candle' ? activeColor : inactiveColor}
+              stroke-width="1"
+            />
+            <rect
+              x="7"
+              y="4"
+              width="3"
+              height="4"
+              rx="0.5"
+              fill={activeMode === 'candle' ? activeColor : inactiveColor}
+            />
+          </svg>
+        </button>
+      </div>
+    {/if}
+
+    {#if showSeriesToggle}
+      <div
+        aria-hidden={!isMultiSeries ? true : undefined}
+        inert={!isMultiSeries}
+        style={`display:inline-flex;gap:${ws === 'text' ? 4 : 2}px;background:${ws === 'text' ? 'transparent' : isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};border-radius:${ws === 'rounded' ? 999 : 6}px;padding:${ws === 'text' ? 0 : ws === 'rounded' ? 3 : 2}px;opacity:${isMultiSeries ? 1 : 0};transition:opacity 0.4s;pointer-events:${isMultiSeries ? 'auto' : 'none'};`}
+      >
+        {#each lastSeriesProp as series, index (series.id)}
+          {@const isHidden = hiddenSeriesIds.includes(series.id)}
+          {@const seriesColor = series.color || SERIES_COLORS[index % SERIES_COLORS.length]}
+
+          <button
+            type="button"
+            aria-label={`Toggle ${series.label ?? series.id}`}
+            aria-pressed={!isHidden}
+            onclick={() => handleSeriesToggle(series.id)}
+            style={seriesButtonStyle(isHidden)}
+          >
+            <span
+              style={`width:${seriesToggleCompact ? 8 : 6}px;height:${seriesToggleCompact ? 8 : 6}px;border-radius:50%;background:${seriesColor};flex-shrink:0;opacity:${isHidden ? 0.4 : 1};transition:opacity 0.2s;`}
+            ></span>
+            {#if !seriesToggleCompact}
+              {series.label ?? series.id}
+            {/if}
+          </button>
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/if}
+
+<!-- Scrubbing consumes horizontal drags only; the browser keeps vertical page scrolling and pinch-zoom. -->
+<div
+  {...rest}
+  bind:this={containerEl}
+  class={['liveline-root', className]}
+  style:touch-action={scrub ? 'pan-y pinch-zoom' : null}
+>
+  <canvas bind:this={canvasEl} class="liveline-canvas" style:cursor={cursorStyle}></canvas>
+</div>
+
+<style>
+  .liveline-root {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .liveline-canvas {
+    display: block;
+  }
+</style>

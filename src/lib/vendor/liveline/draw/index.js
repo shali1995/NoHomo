@@ -1,0 +1,486 @@
+import { drawGrid } from './grid';
+import { drawLine } from './line';
+import { drawDot, drawArrows, drawSimpleDot, drawMultiDot } from './dot';
+import { drawCrosshair } from './crosshair';
+import { drawReferenceLine } from './referenceLine';
+import { drawTimeAxis } from './timeAxis';
+import { drawOrderbook } from './orderbook';
+import { drawParticles, spawnOnSwing } from './particles';
+import { drawCandlesticks, drawClosePrice, drawCandleCrosshair, drawLineModeCrosshair } from './candlestick';
+import { drawEmpty } from './empty';
+// Constants
+const SHAKE_DECAY_RATE = 0.002;
+const SHAKE_MIN_AMPLITUDE = 0.2;
+export const FADE_EDGE_WIDTH = 40;
+export function createShakeState() {
+    return { amplitude: 0 };
+}
+/** Offsets the frame by the current shake and decays it. Returns whether the context was saved. */
+function beginShake(ctx, shake, dt) {
+    if (!shake)
+        return false;
+    let translated = false;
+    if (shake.amplitude > SHAKE_MIN_AMPLITUDE) {
+        ctx.save();
+        ctx.translate((Math.random() - 0.5) * 2 * shake.amplitude, (Math.random() - 0.5) * 2 * shake.amplitude);
+        translated = true;
+    }
+    // Exponential decay — ~200ms of visible shake
+    shake.amplitude *= Math.pow(SHAKE_DECAY_RATE, dt / 1000);
+    if (shake.amplitude < SHAKE_MIN_AMPLITUDE)
+        shake.amplitude = 0;
+    return translated;
+}
+/** A burst shakes the chart in proportion to the swing behind it; bursts in one frame do not stack. */
+function shakeFor(shake, swing, burst) {
+    if (shake)
+        shake.amplitude = Math.max(shake.amplitude, (3 + swing * 4) * burst);
+}
+/**
+ * Master draw function — calls each draw module in order.
+ * Mutates arrowState in place.
+ */
+export function drawFrame(ctx, layout, palette, opts) {
+    // 0. Chart shake — apply offset, decay amplitude
+    const shaking = beginShake(ctx, opts.shakeState, opts.dt);
+    const reveal = opts.chartReveal;
+    const pause = opts.pauseProgress;
+    // Smoothstep helper for staggered reveal
+    const revealRamp = (start, end) => {
+        const t = Math.max(0, Math.min(1, (reveal - start) / (end - start)));
+        return t * t * (3 - 2 * t);
+    };
+    // 1. Reference line (behind everything) — fades with reveal
+    if (opts.referenceLine && reveal > 0.01) {
+        ctx.save();
+        if (reveal < 1)
+            ctx.globalAlpha = reveal;
+        drawReferenceLine(ctx, layout, palette, opts.referenceLine);
+        ctx.restore();
+    }
+    // 2. Grid — fades in delayed (15%–70% of reveal)
+    if (opts.showGrid) {
+        const gridAlpha = reveal < 1 ? revealRamp(0.15, 0.7) : 1;
+        if (gridAlpha > 0.01) {
+            ctx.save();
+            if (gridAlpha < 1)
+                ctx.globalAlpha = gridAlpha;
+            drawGrid(ctx, layout, palette, opts);
+            ctx.restore();
+        }
+    }
+    // 2b. Orderbook (behind line) — fades with reveal
+    if (opts.orderbookData && opts.orderbookState && reveal > 0.01) {
+        ctx.save();
+        if (reveal < 1)
+            ctx.globalAlpha = reveal;
+        drawOrderbook(ctx, layout, palette, {
+            orderbook: opts.orderbookData,
+            dt: opts.dt,
+            state: opts.orderbookState,
+            swingMagnitude: opts.swingMagnitude,
+        });
+        ctx.restore();
+    }
+    // 3. Line + fill (with scrub dimming + reveal morphing)
+    const pts = drawLine(ctx, layout, palette, opts);
+    // 4. Time axis — same timing as grid
+    {
+        const timeAlpha = reveal < 1 ? revealRamp(0.15, 0.7) : 1;
+        if (timeAlpha > 0.01) {
+            ctx.save();
+            if (timeAlpha < 1)
+                ctx.globalAlpha = timeAlpha;
+            drawTimeAxis(ctx, layout, palette, opts);
+            ctx.restore();
+        }
+    }
+    if (pts && pts.length > 0) {
+        const lastPt = pts[pts.length - 1];
+        // 5. Dot — dims during scrub, fades in with reveal (0.3 → 1.0)
+        const dotScrub = opts.crosshairOpacity;
+        // Dot appears once shape is recognizable (reveal > 0.3)
+        const dotAlpha = reveal < 0.3 ? 0 : (reveal - 0.3) / 0.7;
+        const showPulse = opts.showPulse && reveal > 0.6 && pause < 0.5;
+        if (dotAlpha > 0.01) {
+            ctx.save();
+            if (dotAlpha < 1)
+                ctx.globalAlpha = dotAlpha;
+            drawDot(ctx, lastPt, palette, { pulse: showPulse, scrubAmount: dotScrub, now_ms: opts.now_ms });
+            ctx.restore();
+        }
+        // 5b. Arrows — appear late in reveal (60%+), fade with pause
+        if (opts.showMomentum) {
+            const arrowReveal = reveal < 1 ? revealRamp(0.6, 1) : 1;
+            const arrowAlpha = arrowReveal * (1 - pause);
+            if (arrowAlpha > 0.01) {
+                ctx.save();
+                if (arrowAlpha < 1)
+                    ctx.globalAlpha = arrowAlpha;
+                drawArrows(ctx, lastPt, palette, opts);
+                ctx.restore();
+            }
+        }
+        // 6. Particles — only when fully revealed
+        if (opts.particleState && reveal > 0.9) {
+            const burst = spawnOnSwing(opts.particleState, lastPt, palette.line, opts);
+            if (burst > 0)
+                shakeFor(opts.shakeState, opts.swingMagnitude, burst);
+            drawParticles(ctx, opts.particleState, opts.dt);
+        }
+    }
+    // 7. Left edge fade — gradient erase
+    const fadeW = FADE_EDGE_WIDTH;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    const fadeGrad = ctx.createLinearGradient(layout.pad.left, 0, layout.pad.left + fadeW, 0);
+    fadeGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    fadeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = fadeGrad;
+    ctx.fillRect(0, 0, layout.pad.left + fadeW, layout.h);
+    ctx.restore();
+    // 8. Crosshair
+    if (opts.hoverX !== null && opts.hoverValue !== null && pts && pts.length > 0) {
+        drawCrosshair(ctx, layout, palette, {
+            hoverX: opts.hoverX,
+            points: [{ y: layout.toY(opts.hoverValue), color: palette.line }],
+            opacity: opts.crosshairOpacity,
+        });
+    }
+    if (shaking)
+        ctx.restore();
+}
+/**
+ * Multi-series draw function — draws multiple overlapping lines sharing the same axes.
+ * No fill, no momentum arrows, no badge (those are per-chart concerns handled by the engine).
+ */
+export function drawMultiFrame(ctx, layout, opts) {
+    const shaking = beginShake(ctx, opts.shakeState, opts.dt);
+    const palette = opts.primaryPalette;
+    const reveal = opts.chartReveal;
+    const revealRamp = (start, end) => {
+        const t = Math.max(0, Math.min(1, (reveal - start) / (end - start)));
+        return t * t * (3 - 2 * t);
+    };
+    // 1. Reference line
+    if (opts.referenceLine && reveal > 0.01) {
+        ctx.save();
+        if (reveal < 1)
+            ctx.globalAlpha = reveal;
+        drawReferenceLine(ctx, layout, palette, opts.referenceLine);
+        ctx.restore();
+    }
+    // 2. Grid
+    if (opts.showGrid) {
+        const gridAlpha = reveal < 1 ? revealRamp(0.15, 0.7) : 1;
+        if (gridAlpha > 0.01) {
+            ctx.save();
+            if (gridAlpha < 1)
+                ctx.globalAlpha = gridAlpha;
+            drawGrid(ctx, layout, palette, opts);
+            ctx.restore();
+        }
+    }
+    // 3. Draw each series line (back to front, no fill, with scrub dimming)
+    // During reverse morph, secondary lines fade out so only one remains at
+    // chartReveal=0 — prevents alpha compounding from multiple overlapping strokes
+    // looking brighter than the single standalone loading squiggly.
+    const allPts = [];
+    for (let si = 0; si < opts.series.length; si++) {
+        const s = opts.series[si];
+        const seriesAlpha = s.alpha ?? 1;
+        const secondaryFade = (si > 0 && reveal < 1) ? Math.min(1, reveal * 2) : 1;
+        const combinedAlpha = secondaryFade * seriesAlpha;
+        if (combinedAlpha < 0.01)
+            continue;
+        ctx.save();
+        if (combinedAlpha < 1)
+            ctx.globalAlpha = combinedAlpha;
+        const pts = drawLine(ctx, layout, s.palette, {
+            visible: s.visible,
+            smoothValue: s.smoothValue,
+            now: opts.now,
+            showFill: false,
+            hoverX: opts.hoverX,
+            scrubAmount: opts.scrubAmount,
+            chartReveal: reveal,
+            now_ms: opts.now_ms,
+        });
+        ctx.restore();
+        if (pts && pts.length > 0) {
+            allPts.push({ series: s, pts, palette: s.palette, label: s.label, alpha: seriesAlpha });
+        }
+    }
+    // 4. Time axis
+    {
+        const timeAlpha = reveal < 1 ? revealRamp(0.15, 0.7) : 1;
+        if (timeAlpha > 0.01) {
+            ctx.save();
+            if (timeAlpha < 1)
+                ctx.globalAlpha = timeAlpha;
+            drawTimeAxis(ctx, layout, palette, opts);
+            ctx.restore();
+        }
+    }
+    // 5. Endpoint dots + labels for each series
+    // Dots stay at reveal-based alpha only (no scrub dimming) — matching
+    // single-series where drawDot keeps inner dot at full baseAlpha
+    if (reveal > 0.3 && allPts.length > 0) {
+        const dotAlpha = (reveal - 0.3) / 0.7;
+        const showPulse = opts.showPulse && reveal > 0.6 && opts.pauseProgress < 0.5;
+        for (const entry of allPts) {
+            if (entry.alpha < 0.01)
+                continue;
+            const lastPt = entry.pts[entry.pts.length - 1];
+            ctx.save();
+            ctx.globalAlpha = dotAlpha * entry.alpha;
+            // Use pulsing dot when enabled and series is mostly visible
+            if (showPulse && entry.alpha > 0.5) {
+                drawMultiDot(ctx, lastPt, entry.palette.line, { now_ms: opts.now_ms });
+            }
+            else {
+                drawSimpleDot(ctx, lastPt, entry.palette.line);
+            }
+            // Label at endpoint (right of dot — layout reserves space via labelReserve)
+            if (entry.label) {
+                ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillStyle = entry.palette.line;
+                ctx.fillText(entry.label, lastPt[0] + 6, lastPt[1] + 3.5);
+            }
+            ctx.restore();
+        }
+    }
+    // 5b. Particles — each series bursts from its own live dot, only when fully revealed
+    if (opts.particleStates && reveal > 0.9) {
+        for (const entry of allPts) {
+            const state = opts.particleStates.get(entry.series.id);
+            if (!state || entry.alpha < 0.5)
+                continue;
+            const swing = entry.series.swingMagnitude ?? 0;
+            const burst = spawnOnSwing(state, entry.pts[entry.pts.length - 1], entry.palette.line, {
+                momentum: entry.series.momentum ?? 'flat',
+                swingMagnitude: swing,
+                dt: opts.dt,
+                particleOptions: opts.particleOptions,
+            });
+            if (burst > 0)
+                shakeFor(opts.shakeState, swing, burst);
+        }
+        for (const state of opts.particleStates.values())
+            drawParticles(ctx, state, opts.dt);
+    }
+    // 6. Left edge fade
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    const fadeGrad = ctx.createLinearGradient(layout.pad.left, 0, layout.pad.left + FADE_EDGE_WIDTH, 0);
+    fadeGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    fadeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = fadeGrad;
+    ctx.fillRect(0, 0, layout.pad.left + FADE_EDGE_WIDTH, layout.h);
+    ctx.restore();
+    // 7. Crosshair
+    if (opts.hoverX !== null && opts.hoverEntries.length > 0 && allPts.length > 0) {
+        drawCrosshair(ctx, layout, palette, {
+            hoverX: opts.hoverX,
+            points: opts.hoverEntries.map((entry) => ({ y: layout.toY(entry.value), color: entry.color })),
+            opacity: opts.crosshairOpacity,
+        });
+    }
+    if (shaking)
+        ctx.restore();
+}
+/**
+ * Candlestick draw orchestrator — calls each draw module in the correct
+ * order for candle mode. Pure drawing function, no state management.
+ */
+export function drawCandleFrame(ctx, layout, palette, opts) {
+    const { w, h, pad, chartW, chartH } = layout;
+    const reveal = opts.chartReveal;
+    // When fully in line mode, delegate entirely to drawLine (same path as
+    // drawFrame) so transitions are visually identical to line mode.
+    const fullLineMode = opts.lineModeProg >= 0.99;
+    // Line presence (lp): during the reveal, the morph line smoothly
+    // transforms from the loading squiggly into data positions. In candle
+    // mode it fades much faster (cubed) so candles become dominant early
+    // and the morphing line never looks like a "line chart."
+    const revealLine = fullLineMode
+        ? (1 - reveal)
+        : (1 - reveal) * (1 - reveal) * (1 - reveal);
+    const lp = Math.max(opts.lineModeProg, revealLine);
+    // colorBlend: when reveal drives lp, force grey (loading squiggly color).
+    // When the user's lineModeProg drives lp, use accent color.
+    const colorBlend = lp > 0.001 ? opts.lineModeProg / lp : 1;
+    // Smoothstep helper for staggered reveal
+    const revealRamp = (start, end) => {
+        const t = Math.max(0, Math.min(1, (reveal - start) / (end - start)));
+        return t * t * (3 - 2 * t);
+    };
+    // 1. Grid — fades in (25%–60% of reveal)
+    const gridAlpha = revealRamp(0.25, 0.6);
+    if (opts.showGrid && gridAlpha > 0.01) {
+        ctx.save();
+        if (gridAlpha < 1)
+            ctx.globalAlpha = gridAlpha;
+        drawGrid(ctx, layout, palette, opts);
+        ctx.restore();
+    }
+    // 2. Line — morph line that transforms from loading squiggly into data.
+    //    Returns pts for dot position.
+    let linePts;
+    if (lp > 0.01 && opts.lineVisible.length >= 2) {
+        ctx.save();
+        ctx.globalAlpha = lp;
+        linePts = drawLine(ctx, layout, palette, {
+            visible: opts.lineVisible,
+            smoothValue: opts.lineSmoothValue,
+            now: opts.now,
+            showFill: opts.lineModeProg > 0.01,
+            hoverX: opts.hoverX,
+            scrubAmount: opts.scrubAmount,
+            chartReveal: opts.chartReveal,
+            now_ms: opts.now_ms,
+            colorBlend,
+            skipDashLine: !fullLineMode,
+            fillScale: opts.lineModeProg,
+        });
+        ctx.restore();
+    }
+    // 3. Close price line — fades in (40%–80% of reveal)
+    //    Uses closePriceCandle (pre-blend) so the dashed line isn't affected
+    //    by line mode morph or OHLC collapse.
+    const closeAlpha = revealRamp(0.4, 0.8);
+    const closeSource = opts.closePriceCandle ?? opts.liveCandle;
+    if (closeSource && closeAlpha > 0.01) {
+        // Candle-colored close line (fades out with lineModeProg)
+        if (lp < 0.99) {
+            ctx.save();
+            ctx.globalAlpha = closeAlpha * (1 - lp);
+            drawClosePrice(ctx, layout, closeSource, opts);
+            ctx.restore();
+        }
+        // Accent-colored dash line (fades in with lineModeProg)
+        // Skip when fully in line mode — drawLine draws its own morphing dash
+        if (lp > 0.01 && !fullLineMode) {
+            const dashY = layout.toY(closeSource.close);
+            if (dashY >= pad.top && dashY <= h - pad.bottom) {
+                ctx.save();
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = palette.dashLine;
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = closeAlpha * lp * (1 - opts.scrubAmount * 0.2);
+                ctx.beginPath();
+                ctx.moveTo(pad.left, dashY);
+                ctx.lineTo(w - pad.right, dashY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+        }
+    }
+    // 4. Candles — alpha = chartReveal * (1 - lp)
+    //    During reveal, OHLC collapses toward close so candle bodies shrink
+    //    into thin lines before fading out (or grow from thin lines on appear).
+    const candleAlpha = opts.chartReveal * (1 - lp);
+    if (candleAlpha > 0.01) {
+        // OHLC expansion uses smoothstep on reveal — this keeps shape and alpha
+        // in sync (at 50% visible, candles are ~50% expanded rather than flat).
+        const ohlcScale = reveal * reveal * (3 - 2 * reveal);
+        const collapseC = (c) => ohlcScale >= 0.99 ? c : ({
+            time: c.time,
+            open: c.close + (c.open - c.close) * ohlcScale,
+            high: c.close + (c.high - c.close) * ohlcScale,
+            low: c.close + (c.low - c.close) * ohlcScale,
+            close: c.close,
+        });
+        const revealCandles = ohlcScale < 0.99 ? opts.candles.map(collapseC) : opts.candles;
+        const revealOld = ohlcScale < 0.99 && opts.oldCandles.length > 0
+            ? opts.oldCandles.map(collapseC) : opts.oldCandles;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(pad.left - 1, pad.top, chartW + 2, chartH);
+        ctx.clip();
+        const candleOptions = {
+            candleWidthSecs: opts.displayCandleWidth,
+            liveTime: opts.liveCandle?.time ?? -1,
+            now_ms: opts.now_ms,
+            scrubX: opts.hoverX ?? 0,
+            scrubDim: opts.scrubAmount,
+            liveAlpha: opts.liveBirthAlpha,
+            liveBullBlend: opts.liveBullBlend,
+            accentColor: lp > 0.01 ? palette.line : undefined,
+            accentBlend: lp,
+        };
+        if (opts.morphT >= 0 && revealOld.length > 0) {
+            ctx.globalAlpha = (1 - opts.morphT) * candleAlpha;
+            drawCandlesticks(ctx, layout, revealOld, {
+                ...candleOptions,
+                candleWidthSecs: opts.oldWidth,
+                liveTime: -1,
+                liveAlpha: 1,
+                liveBullBlend: -1,
+            });
+            ctx.globalAlpha = opts.morphT * candleAlpha;
+            drawCandlesticks(ctx, layout, revealCandles, candleOptions);
+            ctx.globalAlpha = 1;
+        }
+        else {
+            if (candleAlpha < 1)
+                ctx.globalAlpha = candleAlpha;
+            drawCandlesticks(ctx, layout, revealCandles, candleOptions);
+        }
+        ctx.restore();
+    }
+    // 5. Live dot — position from drawLine's returned pts (same as drawFrame).
+    if (lp > 0.5 && linePts && linePts.length > 0 && reveal > 0.3) {
+        const lastPt = linePts[linePts.length - 1];
+        const dotAlpha = ((lp - 0.5) * 2) * ((reveal - 0.3) / 0.7);
+        const showPulse = lp > 0.8 && reveal > 0.6;
+        if (dotAlpha > 0.01) {
+            ctx.save();
+            ctx.globalAlpha = dotAlpha;
+            drawDot(ctx, lastPt, palette, { pulse: showPulse, scrubAmount: opts.scrubAmount, now_ms: opts.now_ms });
+            ctx.restore();
+        }
+    }
+    // 6. Time axis — fades in (25%–60% of reveal)
+    const timeAlpha = revealRamp(0.25, 0.6);
+    if (timeAlpha > 0.01) {
+        ctx.save();
+        if (timeAlpha < 1)
+            ctx.globalAlpha = timeAlpha;
+        drawTimeAxis(ctx, layout, palette, opts);
+        ctx.restore();
+    }
+    // 7. Left edge fade — gradient erase
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    const fadeGrad = ctx.createLinearGradient(pad.left, 0, pad.left + FADE_EDGE_WIDTH, 0);
+    fadeGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    fadeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = fadeGrad;
+    ctx.fillRect(0, 0, pad.left + FADE_EDGE_WIDTH, h);
+    ctx.restore();
+    // 8. Reverse morph empty overlay — only when collapsing to empty state
+    //    (not during forward morph or loading), matching line mode's
+    //    `revealTarget === 0 && !cfg.loading` guard.
+    if (opts.showEmptyOverlay) {
+        const bgAlpha = 1 - opts.chartReveal;
+        if (bgAlpha > 0.01) {
+            const bgEmptyAlpha = (1 - opts.loadingAlpha) * bgAlpha;
+            if (bgEmptyAlpha > 0.01) {
+                drawEmpty(ctx, layout, palette, { alpha: bgEmptyAlpha, now_ms: opts.now_ms, skipLine: true, emptyText: opts.emptyText });
+            }
+        }
+    }
+    // 9. Crosshair — only when mostly revealed (70%+)
+    if (opts.chartReveal > 0.7 && opts.hoveredCandle && opts.hoverX !== null && opts.crosshairOpacity > 0.01) {
+        const crosshairOptions = { hoverX: opts.hoverX, opacity: opts.crosshairOpacity };
+        if (opts.lineModeProg > 0.5) {
+            drawLineModeCrosshair(ctx, layout, palette, { ...crosshairOptions, y: layout.toY(opts.hoveredCandle.close) });
+        }
+        else {
+            drawCandleCrosshair(ctx, layout, palette, crosshairOptions);
+        }
+    }
+}

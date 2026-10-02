@@ -1,0 +1,1 @@
+{"version":3,"file":"range.d.ts","sourceRoot":"","sources":["../../src/lib/math/range.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,aAAa,EAAE,MAAM,UAAU,CAAA;AAE7C;;;GAGG;AACH,wBAAgB,YAAY,CAC1B,OAAO,EAAE,aAAa,EAAE,EACxB,YAAY,EAAE,MAAM,EACpB,cAAc,CAAC,EAAE,MAAM,EACvB,UAAU,CAAC,EAAE,OAAO,GACnB;IAAE,GAAG,EAAE,MAAM,CAAC;IAAC,GAAG,EAAE,MAAM,CAAA;CAAE,CAiC9B"}
