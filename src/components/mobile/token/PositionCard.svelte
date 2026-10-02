@@ -12,8 +12,13 @@
   and two of them must not race each other into the same target list.
 -->
 <script>
-  import { formatUsd } from "../../../lib/api/token.svelte.js";
-  import { commitPositionTargets } from "../../../lib/api/trade.svelte.js";
+  import { formatCompact, formatUsd, getAddress, getChain, getTokenStats } from "../../../lib/api/token.svelte.js";
+  import {
+    cancelPendingSwap,
+    commitPositionTargets,
+    isCancellingSwap
+  } from "../../../lib/api/trade.svelte.js";
+  import TokenBadge from "../../../icons/token-badge.svelte";
   import ExitPlan from "./ExitPlan.svelte";
 
   let { position } = $props();
@@ -64,6 +69,51 @@
   const up = $derived(pnlUsd >= 0);
   const tone = $derived(flat ? "var(--m-muted)" : up ? "var(--m-green)" : "var(--m-red)");
 
+  /**
+   * The two rows the desktop card carries under the figures. "Avg entry" prints the market cap on
+   * the desktop — its own label for that row, value and all — and the mobile keeps the desktop's
+   * wording rather than inventing a second one for the same number.
+   */
+  const invested = $derived(`$${Number(position?.investedUsd ?? 0).toFixed(2)}`);
+  const stats = $derived(getTokenStats());
+  const avgEntry = $derived(stats?.marketCap ? `${stats.marketCap} MC` : "\u2014");
+
+  /**
+   * The exit plan's live targets, as the desktop card's chips: the kind and its number, what it
+   * fires at, and how much it sells. `metTargets` is history and the desktop leaves those to the
+   * plan's own panel, so only the live ones are read here.
+   */
+  const targetPills = $derived(
+    (position?.liveTargets ?? []).filter(Boolean).map((target) => ({
+      ...target,
+      note: target.note ?? `sell ${Number(target.sellPct ?? 0)}%`
+    }))
+  );
+
+  /**
+   * The resting buy, in the desktop's own pill: what it is, the level it waits at, and what it will
+   * spend. The desktop reveals a Cancel button on hover and cancels on click; a phone has no hover,
+   * so the first tap asks and the second one cancels — a stray touch must not pull an order.
+   */
+  const dip = $derived(position?.dipPill ?? null);
+  let asking = $state(null);
+  let askTimer = null;
+
+  function askToCancel(pill) {
+    if (isCancellingSwap(pill.swapId)) return;
+    if (asking === pill.id) {
+      clearTimeout(askTimer);
+      asking = null;
+      void cancelPendingSwap({ chain: getChain(), address: getAddress(), swapId: pill.swapId });
+      return;
+    }
+    asking = pill.id;
+    clearTimeout(askTimer);
+    askTimer = setTimeout(() => (asking = null), 3000);
+  }
+
+  $effect(() => () => clearTimeout(askTimer));
+
   /** The capture prints `+$0` rather than `+$0.00`. */
   const pnlText = $derived(
     Math.abs(pnlUsd) < 0.005 ? "$0" : `$${Math.abs(pnlUsd).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -80,6 +130,14 @@
   </div>
 
   <div class="row">
+    <!-- The desktop puts the token's own mark beside the figures, with the verified badge cut
+         into its lower-right corner; the mobile card had no mark at all. -->
+    <div class="mark">
+      {#if position?.image}
+        <img src={position.image} alt="" />
+      {/if}
+      <span class="badge" aria-hidden="true"><TokenBadge /></span>
+    </div>
     <div class="stack">
       <span class="value m-num">{value}</span>
       <span class="amount m-num">{amount}</span>
@@ -94,6 +152,52 @@
       </span>
     </div>
   </div>
+
+  <!-- What the position cost and what it is measured against, as the desktop card has them. -->
+  <div class="facts">
+    <div class="fact">
+      <span class="fact-label">Invested</span>
+      <span class="fact-value m-num">{invested}</span>
+    </div>
+    <div class="fact">
+      <span class="fact-label">Avg entry</span>
+      <span class="fact-value m-num">{avgEntry}</span>
+    </div>
+  </div>
+
+  {#if targetPills.length}
+    <!-- One equal column per target, so two of them share the row the way the desktop's do. -->
+    <div class="pills" style="grid-template-columns: repeat({targetPills.length}, minmax(0, 1fr));">
+      {#each targetPills as pill (pill.id)}
+        <div class="pill pill--{pill.kind === "STOP_LOSS" ? "stop" : "target"}">
+          <span class="pill-tag">{pill.tag}</span>
+          <span class="pill-label m-num">{pill.label}</span>
+          <span class="pill-note m-num">{pill.note}</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  {#if dip}
+    <!-- The resting buy: the same yellow pill the desktop shows, with a tap asking first. -->
+    <button
+      type="button"
+      class="pill"
+      class:pill--asking={asking === dip.id}
+      title="Cancel dip buy"
+      onclick={() => askToCancel(dip)}
+    >
+      <span class="pill-tag">{dip.tag}</span>
+      <span class="pill-label m-num">{dip.label}</span>
+      {#if isCancellingSwap(dip.swapId)}
+        <span class="pill-spin" aria-hidden="true"></span>
+      {:else if asking === dip.id}
+        <span class="pill-note pill-note--ask">Cancel</span>
+      {:else}
+        <span class="pill-note m-num">{dip.note}</span>
+      {/if}
+    </button>
+  {/if}
 
   <!-- The live plan: only the targets the trade actually carries, and the chips that add,
        change or clear them. It writes through `commitPositionTargets` and nothing else. -->
@@ -146,6 +250,39 @@
     margin-top: 8px;
   }
 
+  .mark {
+    position: relative;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    margin-right: 12px;
+  }
+
+  .mark img {
+    display: block;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--m-hairline);
+    border-radius: 16px;
+    object-fit: cover;
+    background: var(--m-card-2);
+  }
+
+  .badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .badge :global(svg) {
+    display: block;
+    width: 14px;
+    height: 14px;
+  }
+
   .stack {
     display: flex;
     flex-direction: column;
@@ -180,6 +317,120 @@
     font-weight: 500;
     line-height: 16.5px;
     color: var(--m-muted);
+  }
+
+  /* Invested and Avg entry: the desktop's two rows, at the card's own label/value scale. */
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--m-hairline);
+  }
+
+  .fact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    line-height: 1;
+  }
+
+  .fact-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--m-muted);
+  }
+
+  .fact-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--m-text);
+  }
+
+  /* The plan's chips: a green take profit, a red stop, spread across the card. */
+  .pills {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .pill--target {
+    background: rgba(4, 194, 73, 0.16);
+  }
+
+  .pill--stop {
+    background: rgba(255, 81, 33, 0.16);
+  }
+
+  .pill--target .pill-tag,
+  .pill--target .pill-label,
+  .pill--target .pill-note {
+    color: var(--m-green);
+  }
+
+  .pill--stop .pill-tag,
+  .pill--stop .pill-label,
+  .pill--stop .pill-note {
+    color: var(--m-red);
+  }
+
+  /* The dip pill: yellow, as the desktop draws it and as its line on the chart reads. */
+  .pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    margin-top: 10px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 10px;
+    background: rgba(255, 199, 79, 0.16);
+    cursor: pointer;
+  }
+
+  .pill--asking {
+    background: rgba(255, 199, 79, 0.3);
+  }
+
+  .pill-tag,
+  .pill-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--m-warn);
+  }
+
+  .pills .pill {
+    margin-top: 0;
+    cursor: default;
+  }
+
+  .pill-note {
+    font-size: 12px;
+    color: var(--m-warn);
+    opacity: 0.5;
+  }
+
+  .pill-note--ask {
+    font-weight: 700;
+    opacity: 1;
+  }
+
+  /* The desktop's spinner while the cancel is in the air. */
+  .pill-spin {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--m-warn);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: pill-spin 0.8s linear infinite;
+  }
+
+  @keyframes pill-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .arrow {
