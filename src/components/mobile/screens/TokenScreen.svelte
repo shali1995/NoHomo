@@ -94,7 +94,9 @@
       void selectToken(apiCh, addr);
       void (async () => {
         await selectChart(apiCh, addr);
-        if (getMode() !== "price") await setMode("price");
+        // the phone keeps this chart on the market-cap axis: the capture's own market cap is what
+        // a reader of a fresh token is watching, and the candles arrive in that unit
+        if (getMode() !== "marketCap") await setMode("marketCap");
         if (getFrame() !== DEFAULT_FRAME) await setFrame(DEFAULT_FRAME);
       })();
     });
@@ -119,7 +121,7 @@
       <div class="stage">
         <TokenPriceBlock {token} />
         <!-- The address is what the chart's own level lines key the account's trade on. -->
-        <TokenCandles {candles} type={chartType} {address} />
+        <TokenCandles {candles} type={chartType} {address} mode="marketCap" />
         <TimeframeStrip
           frames={FRAMES}
           active={frame}

@@ -103,6 +103,25 @@
    */
   const livePrice = $derived(Number(getToken()?.quote?.priceUsdStr ?? 0) || 0);
 
+  /**
+   * The chart's own unit. On the price axis a candle is a price; on the market-cap axis the same
+   * candle is that price times the supply — which is the series the API returns in this mode, so
+   * everything that has to meet the candles (the live value, and the account's own levels) is
+   * carried across with the supply.
+   */
+  const inCap = $derived(mode === "marketCap");
+  const supply = $derived(Number(getToken()?.totalSupply ?? getToken()?.quote?.totalSupply ?? 0) || 0);
+  /** A price as the axis draws it. */
+  const asChart = (price) => (inCap && supply > 0 ? Number(price) * supply : Number(price));
+  /** And back, which is the unit every level-moving call is written in. */
+  const asPrice = (value) => (inCap && supply > 0 ? Number(value) / supply : Number(value));
+  /** The market's own value on this axis. */
+  const liveMark = $derived(
+    inCap
+      ? Number(getToken()?.quote?.marketCapUsdStr ?? 0) || (livePrice > 0 ? livePrice * supply : 0)
+      : livePrice
+  );
+
   /** The bucket the clock is inside, in the frame's own seconds. */
   const bucketStart = (seconds) => Math.floor(seconds / frameSeconds) * frameSeconds;
 
@@ -116,7 +135,7 @@
   const liveCandle = $derived.by(() => {
     if (series.length === 0) return undefined;
     const newest = series[series.length - 1];
-    const price = livePrice > 0 ? livePrice : newest.close;
+    const price = liveMark > 0 ? liveMark : newest.close;
     if (bucketStart(Date.now() / 1000) === bucketStart(newest.time)) {
       return {
         time: newest.time,
@@ -138,7 +157,7 @@
   /** Nothing is still forming in the past, so a panned chart passes no live candle. */
   const live = $derived(away ? undefined : liveCandle);
   /** The figures the tip follows: the market's price, not the last candle's close. */
-  const newestPrice = $derived(livePrice > 0 ? livePrice : last);
+  const newestPrice = $derived(liveMark > 0 ? liveMark : last);
 
   /** The price, or the market cap: the axis this page keeps the chart on. */
   function formatAmount(amount) {
@@ -288,7 +307,17 @@
     const position = positionsFor(address)[0] ?? null;
     // `market` is what a resting buy is clamped under, and the fallback anchor for a percent
     // target on an order that has not filled yet — the desktop's own two uses for it.
-    return mobilePriceLevels(position, candles).map((level) => ({ ...level, market: newestPrice }));
+    /**
+     * The levels are worked out in prices — the unit the store and the move calls speak — and
+     * carried onto the axis the candles are drawn on. The clamps come across too, since they are
+     * compared against the same scale.
+     */
+    return mobilePriceLevels(position, candles).map((level) => ({
+      ...level,
+      price: asChart(level.price),
+      entry: asChart(level.entry),
+      market: newestPrice
+    }));
   });
 
   /**
@@ -344,7 +373,7 @@
     onLayout={(next) => (layoutRef = next)}
   />
 
-  <LiveLevels {address} {levels} {gesture} layout={() => layoutRef} />
+  <LiveLevels {address} {levels} {gesture} toprice={asPrice} layout={() => layoutRef} />
 </div>
 
 <style>

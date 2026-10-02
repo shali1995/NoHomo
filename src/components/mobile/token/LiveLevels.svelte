@@ -41,7 +41,9 @@
     address = "",
     levels = [],
     layout = () => null,
-    gesture = { hit: null, blocked: false }
+    gesture = { hit: null, blocked: false },
+    /** A value on the chart's own axis back as a price, which is what a move call is written in. */
+    toprice = (value) => value
   } = $props();
 
   /** The canvas has no CSS variables, so a level's tone is a colour of its own here. */
@@ -183,7 +185,12 @@
     if (!moved) return;
 
     const landed = held?.key === level.key ? held.price : from;
-    const call = levelCall(level, landed, from);
+    /**
+     * The chart may be on the market-cap axis while the level's call is in prices. A target's
+     * percent is a ratio, so it is the same number either way; the dip's level is not, and goes
+     * back through the supply before it is sent.
+     */
+    const call = levelCall(level, level.kind === "dip" ? toprice(landed) : landed, level.kind === "dip" ? toprice(from) : from);
     if (!call) return;
     tick(12);
     let done = false;
