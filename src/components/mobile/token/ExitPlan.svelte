@@ -19,6 +19,7 @@
   position card's scale — label 14/500 muted, value 14/500 text.
 -->
 <script>
+  import Chevron from "../../../icons/chevron-down.svelte";
   import { sellPctShare, TARGET_SHARES } from "../../../lib/api/trade.svelte.js";
 
   let { position, apply = null, waiting = false } = $props();
@@ -46,6 +47,24 @@
   const percentTarget = (kind) =>
     targets.find((target) => target.kind === kind && target.trigger?.type === "PERCENT") ?? null;
   const otherTargets = $derived(targets.filter((target) => target.trigger?.type !== "PERCENT"));
+
+  /**
+   * Open or shut. The plan is a band the card carries under its figures, and a plan that is
+   * already set needs no room: the header says what it is, and the controls wait behind it. The
+   * desktop keeps its own plan behind the same kind of header for the same reason.
+   */
+  let open = $state(false);
+
+  /** What the header says while shut: the live plan in the words the chips use. */
+  const summary = $derived(
+    KINDS.filter((kind) => percentTarget(kind))
+      .map((kind) => {
+        const word = sellPctShare(percentTarget(kind).sellPct) ?? `${percentTarget(kind).sellPct}%`;
+        const pct = Number(percentTarget(kind).trigger?.changePct ?? 0);
+        return `${word} at ${sign(kind)}${Math.abs(Number(pct.toFixed(2)))}%`;
+      })
+      .join(" · ")
+  );
 
   /** The percent boxes' own draft, keyed by kind: the string the reader is looking at. */
   let draft = $state({ TAKE_PROFIT: "", STOP_LOSS: "" });
@@ -158,7 +177,14 @@
 
 {#if targets.length || apply}
   <div class="plan">
-    <span class="band">Exit plan</span>
+    <button type="button" class="head" aria-expanded={open} onclick={() => (open = !open)}>
+      <span class="band">Exit plan</span>
+      <span class="value" class:value--set={!!summary}>{summary || "Set exit plan"}</span>
+      <span class="chevron" class:chevron--up={open}><Chevron style="width: 16px; height: 16px" /></span>
+    </button>
+
+    {#if open}
+    <div class="body">
 
     {#each KINDS as kind (kind)}
       {@const target = percentTarget(kind)}
@@ -223,6 +249,8 @@
         </div>
       {/each}
     {/if}
+    </div>
+    {/if}
   </div>
 {/if}
 
@@ -232,6 +260,56 @@
     margin-top: 10px;
     padding-top: 10px;
     border-top: 1px solid var(--m-hairline);
+  }
+
+  /*
+   * The header is the whole control: the band names it, the value says what is set, and the
+   * chevron turns. Everything below it is the plan's own business and stays behind the toggle.
+   */
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .value {
+    flex: 1 1 auto;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--m-dim);
+  }
+
+  /* A plan that says something reads brighter than the invitation to set one. */
+  .value--set {
+    color: var(--m-text);
+  }
+
+  .chevron {
+    display: flex;
+    flex: 0 0 auto;
+    color: var(--m-dim);
+    transition: transform 200ms ease-out;
+  }
+
+  .chevron--up {
+    transform: rotate(180deg);
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
   }
 
   .band {

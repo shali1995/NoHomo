@@ -17,7 +17,6 @@
   import TimeframeStrip from "../token/TimeframeStrip.svelte";
   import ContentTabs from "../token/ContentTabs.svelte";
   import PositionCard from "../token/PositionCard.svelte";
-  import AddThesisRow from "../token/AddThesisRow.svelte";
   import HoldersTab from "../token/HoldersTab.svelte";
   import FeedTab from "../token/FeedTab.svelte";
   import AboutTab from "../token/AboutTab.svelte";
@@ -132,7 +131,6 @@
 
       {#if position}
         <PositionCard {position} />
-        <AddThesisRow />
       {/if}
 
       <div class="tabs-block">
