@@ -1,8 +1,13 @@
 <!--
-  One token in a phone list.
-  The capture's row: a 48 dp disc with a verified rosette on its corner, the symbol over
-  the market cap on the left, the price over the 24h change on the right, 66.7 dp of
+  One token in a phone list: a 48 dp disc with a verified rosette on its corner, 66.7 dp of
   height with 16 dp gutters.
+
+  The two lines are slots, because the panel's rows do not all carry the same figures. A
+  scanner or trench row follows the desktop's own arrangement — the price under the symbol
+  on the left, the market cap and the 24h change on the right — while a curated asset
+  (Crypto, Stocks) has no market cap to show and puts its price on the right instead. So a
+  row says what it has: `meta` fills the left's second line, `primary` the right's first, and
+  what is left over falls to the desktop's defaults.
 -->
 <script>
   import VerifiedBadge from "../../icons/verified-badge.svelte";
@@ -10,10 +15,26 @@
   let { row, onclick } = $props();
 
   const up = $derived(row.dir === "\u25B2");
-  /** A trench row swaps the market cap for volume and the change for bonding progress. */
-  const meta = $derived(row.meta ?? (row.mcap ? `${row.mcap} MC` : ""));
   const bonding = $derived(typeof row.bondedPct === "number");
+
+  /**
+   * The left's second line: whatever the row calls `meta` (a trench row's volume, a curated
+   * asset's name), otherwise nothing — in which case the price takes that line, which is
+   * where the desktop puts it.
+   */
+  const leftMeta = $derived(row.meta ?? null);
+  /** The right's first line: an explicit `primary`, otherwise the market cap. */
+  const rightPrimary = $derived(row.primary ?? (row.mcap ? `${row.mcap} MC` : ""));
+
+  /** The price, drawn in whichever of the two slots ended up carrying it. */
+  const priceInLeft = $derived(leftMeta === null);
 </script>
+
+{#snippet priceLine()}
+  <span class="price m-num"
+    >{row.pricePrefix}{#if row.sub}<sub>{row.sub}</sub>{/if}{row.priceSuffix}</span
+  >
+{/snippet}
 
 <button type="button" class="row" {onclick}>
   <span class="logo">
@@ -27,13 +48,19 @@
 
   <span class="left">
     <span class="symbol m-truncate">{row.symbol}</span>
-    <span class="mcap m-num">{meta}</span>
+    {#if priceInLeft}
+      {@render priceLine()}
+    {:else}
+      <span class="mcap m-num">{leftMeta}</span>
+    {/if}
   </span>
 
   <span class="right">
-    <span class="price m-num"
-      >{row.pricePrefix}{#if row.sub}<sub>{row.sub}</sub>{/if}{row.priceSuffix}</span
-    >
+    {#if priceInLeft}
+      <span class="primary m-num">{rightPrimary}</span>
+    {:else}
+      {@render priceLine()}
+    {/if}
     {#if bonding}
       <!-- The capture's own row has no bonding column; the desktop's Bonding pill has one, so
            the progress takes the change's slot: a 48x4 track with the green fill the desktop
@@ -142,9 +169,26 @@
     line-height: 16.5px;
   }
 
+  /*
+   * The price wears two sizes because it can sit in two places: on the left it is the quiet
+   * second line — the slot the market cap used to hold — and on the right it is the row's
+   * headline. The market cap that replaces it on the right takes the headline size.
+   */
   .price {
-    font-size: 18px;
+    color: var(--m-muted);
+    font-size: 14px;
+    line-height: 16.5px;
+  }
+
+  .right .price {
     color: var(--m-text);
+    font-size: 18px;
+    line-height: 26.1px;
+  }
+
+  .primary {
+    color: var(--m-text);
+    font-size: 18px;
     line-height: 26.1px;
   }
 

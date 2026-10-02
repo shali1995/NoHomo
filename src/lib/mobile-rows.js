@@ -19,11 +19,15 @@ import { rowChange, rowChangeUp, rowPrice } from "./api/lists.svelte.js";
 import { tokenImage } from "./api/config.js";
 import { formatUsdCompact } from "./api/trending.svelte.js";
 
-/** Bonding / Bonded: the second line is volume, and Bonding's right column is progress. */
+/**
+ * Bonding / Bonded: the same row as everywhere else — the price under the symbol, the market
+ * cap and the 24h change on the right — with the bonding progress taking the change's slot.
+ * The 24h volume the desktop's own trench row shows on the second line is not drawn; these
+ * rows read like the rest of the list.
+ */
 export function trenchRowToToken(row) {
   return {
     ...row,
-    meta: row.volume ? `${row.volume} vol` : null,
     bondedPct: typeof row.bondedPct === "number" ? row.bondedPct : null
   };
 }
@@ -43,9 +47,10 @@ export function listRowToToken(row) {
     pricePrefix: "",
     sub: null,
     priceSuffix: price,
-    // A curated asset has no live cap reader here, so the snapshot's is shown when it has one
-    // and the name stands in when it does not — never a zero dressed as a market cap.
-    meta: mcap > 0 ? `${formatUsdCompact(mcap)} MC` : row?.name || "",
+    // A curated asset has no market cap to headline with, so its price stays on the right —
+    // the desktop's AssetRow does the same — and the name takes the quiet line on the left.
+    primary: price,
+    meta: row?.name || "",
     change: change.replace(/^\+/, ""),
     dir: up ? "\u25B2" : "\u25BC"
   };
