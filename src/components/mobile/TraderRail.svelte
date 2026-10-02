@@ -5,11 +5,22 @@
   the section they belong to is the trader ranking we already have.
 -->
 <script>
+  import Chevron from "../../icons/chevron-down.svelte";
   import MedalGold from "../../icons/medal-gold.svelte";
   import MedalSilver from "../../icons/medal-silver.svelte";
   import MedalBronze from "../../icons/medal-bronze.svelte";
 
   let { title, subtitle, traders, onopen } = $props();
+
+  /**
+   * Collapsed until asked for.
+   *
+   * The rail is a 90 dp carousel of cards under a heading, on a screen whose list is what the
+   * reader came for: open by default it took the top of the page and pushed the rows down. Closed,
+   * the heading is one line that says what is behind it, and the whole line is the way in — the
+   * chevron on the right says which way it will go.
+   */
+  let open = $state(false);
 
   const MEDALS = [MedalGold, MedalSilver, MedalBronze];
 
@@ -31,11 +42,20 @@
 </script>
 
 <div class="rail">
-  <div class="head">
+  <button
+    type="button"
+    class="head"
+    aria-expanded={open}
+    onclick={() => (open = !open)}
+  >
     <MedalGold class="h-5 w-5 shrink-0 text-text-secondary" />
     <span class="head-title">{title}{#if subtitle}<span class="head-sub">{subtitle}</span>{/if}</span>
-  </div>
+    <span class="head-chevron" class:head-chevron--up={open}>
+      <Chevron style="width: 16px; height: 16px" />
+    </span>
+  </button>
 
+  {#if open}
   <div class="cards m-rail">
   {#each shown as trader, index (trader.traderKey ?? trader.walletAddress ?? index)}
     <button type="button" class="card" onclick={() => onopen?.(trader)}>
@@ -61,6 +81,7 @@
     </button>
   {/each}
   </div>
+  {/if}
 </div>
 
 <style>
@@ -69,10 +90,14 @@
    * (heading at y 157.3, the first card at 185.6, both at x 16). Laid out as one row, the
    * heading took the first slot and left a 90 dp void under it before the cards began.
    */
+  /*
+   * The height follows what is on show: 117.9 dp with the cards, the heading's own line without
+   * them. A fixed 117.9 left the closed rail holding 90 dp of nothing, which is what it was doing
+   * to the list underneath.
+   */
   .rail {
     display: flex;
     flex-direction: column;
-    height: 117.9px;
     padding: 0 16px;
   }
 
@@ -80,6 +105,8 @@
     display: flex;
     gap: 8px;
     margin-top: 8.6px;
+    /* the cards' own 90.1 dp, so opening the rail does not squash them */
+    height: 90.1px;
   }
 
   .head {
@@ -87,8 +114,25 @@
     flex: 0 0 auto;
     align-items: center;
     gap: 8px;
+    width: 100%;
     height: 19.7px;
-    padding-top: 0.6px;
+    padding: 0.6px 0 0 0;
+    background: none;
+    border: 0;
+    text-align: left;
+  }
+
+  /* The whole line is the control, so the chevron sits at the far end of it, not beside the title. */
+  .head-chevron {
+    display: flex;
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--m-dim);
+    transition: transform 200ms ease-out;
+  }
+
+  .head-chevron--up {
+    transform: rotate(180deg);
   }
 
   .head-title {

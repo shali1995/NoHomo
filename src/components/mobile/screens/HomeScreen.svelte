@@ -250,7 +250,13 @@
 
   .head {
     flex: 0 0 auto;
-    height: 256px;
+    /*
+     * The head is as tall as what it holds: the balance, the trader rail and the tab strip. A
+     * fixed 256 was the capture's own height with the rail open — with it closed the header still
+     * reserved the carousel's 90 dp plus its margins, and the list began 98 dp below the tabs with
+     * nothing in between. Opened, the header grows by exactly what the rail adds.
+     */
+    height: auto;
     margin-top: 8px;
   }
 
