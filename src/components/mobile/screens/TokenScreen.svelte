@@ -49,18 +49,18 @@
   let { chain = "", address = "", onback, onopenbuy, onopensell } = $props();
 
   /**
-   * The capture's six frames. The candle endpoint only answers three of them — `1d`, `7d`,
-   * `1M` and `all` come back 400 — so those three chips are carried but not pressable.
-   * `1M` is deliberately left without a frame: `1m` is the API's one-minute frame.
+   * The frames this page reads on: seconds to an hour, all of them served by the candle
+   * endpoint (`chart.svelte.js`'s `FRAMES`). It opens on the minute — a fresh token on an
+   * hourly frame is one candle, which reads as a single block rather than a chart.
    */
   const FRAMES = [
-    { label: "1H", frame: "1h" },
-    { label: "4H", frame: "4h" },
-    { label: "1D", frame: "24h" },
-    { label: "7D", frame: null },
-    { label: "1M", frame: null },
-    { label: "ALL", frame: null }
+    { label: "1s", frame: "1s" },
+    { label: "15s", frame: "15s" },
+    { label: "1m", frame: "1m" },
+    { label: "5m", frame: "5m" },
+    { label: "1h", frame: "1h" }
   ];
+  const DEFAULT_FRAME = "1m";
 
   let tab = $state("feed");
   let chartType = $state("candles");
@@ -96,7 +96,7 @@
       void (async () => {
         await selectChart(apiCh, addr);
         if (getMode() !== "price") await setMode("price");
-        if (getFrame() !== "1h") await setFrame("1h");
+        if (getFrame() !== DEFAULT_FRAME) await setFrame(DEFAULT_FRAME);
       })();
     });
 
