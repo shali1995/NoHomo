@@ -349,17 +349,17 @@
 
 <style>
   /*
-   * The plot stops where the frame strip starts: the capture's 364 dp would run 21 dp past it,
-   * and the library draws its time axis in the plot's own bottom padding — so at 364 the times
-   * land on top of the frames. 343 dp is the space that is actually there, and it leaves the
-   * axis sitting right above the chips.
+   * The plot stops short of the frame strip: the capture's 364 dp would run past it, and the
+   * library draws its time axis in the plot's own bottom padding — so at 364 the times landed on
+   * top of the frames. 343 dp is the space that is actually there; 335 leaves the axis a small
+   * breath above the chips rather than crowding them.
    */
   .chart {
     position: absolute;
     top: 13.5px;
     left: 0;
     width: 100%;
-    height: 343px;
+    height: 335px;
     /* A sideways drag is the chart's own, so the page must not take it first. */
     touch-action: none;
   }
