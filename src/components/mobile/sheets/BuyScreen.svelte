@@ -67,8 +67,12 @@
     { id: "HIGH", label: "High" }
   ];
 
+  /**
+   * The slippage chips, without an Auto one: the custom box beside them *is* the Auto control, the
+   * way the desktop's own box is — empty means `AUTO`, and it says so with its placeholder. Two
+   * controls for one value is what made the row read as "Auto 0.5% 1% 2% Auto%".
+   */
   const SLIPPAGE = [
-    { id: "AUTO", label: "Auto" },
     { id: 0.5, label: "0.5%" },
     { id: 1, label: "1%" },
     { id: 2, label: "2%" }
@@ -128,7 +132,6 @@
     return Number.isFinite(usd) ? usd : null;
   });
   const settings = $derived(tradeSettings());
-  const trading = $derived(sending);
   const error = $derived(tradeError());
 
   /** The account's cash prices the preset chips off the same number the order spends. */
@@ -144,6 +147,44 @@
 
   const position = $derived(positionsFor(address)[0] ?? null);
   const selling = $derived(side === "sell");
+  /** This side's slippage as the store holds it: `AUTO`, or a number. */
+  const slippageNow = $derived(selling ? settings.sellSlippagePct : settings.buySlippagePct);
+  /** True when the store holds `AUTO`, which is a value a reader picked, not an empty box. */
+  const slippageAuto = $derived(slippageNow === "AUTO");
+  /** True when it holds a number no chip stands for — a custom one. */
+  const slippageCustom = $derived(
+    !slippageAuto && !SLIPPAGE.some((option) => option.id === slippageNow)
+  );
+  /** The custom box is text while it is being typed; `AUTO` shows as an empty box. */
+  const slippageText = (value) => (value === "AUTO" || value == null ? "" : String(value));
+  let slippage = $state(slippageText(slippageNow));
+
+  /**
+   * The box follows the store, so what it shows is what the next trade carries: picking Auto
+   * empties it, picking a chip fills it with that number, and a value the store refuses never
+   * stays in it.
+   */
+  $effect(() => {
+    slippage = slippageText(slippageNow);
+  });
+
+  /**
+   * A typed slippage — the desktop's own rule: empty means Auto, anything else is the number, and
+   * a number outside what the spec allows is refused out loud and the box goes back to the store's
+   * value rather than showing something that will not be sent.
+   */
+  function commitSlippage() {
+    const text = slippage.trim();
+    const next = text === "" ? "AUTO" : Number(text);
+    const { error } = setTradeSettings(
+      selling ? { sellSlippagePct: next } : { buySlippagePct: next }
+    );
+    if (error) {
+      addToast("warning", "Slippage not changed", error, 5000);
+      slippage = slippageText(slippageNow);
+    }
+  }
+  const trading = $derived(sending);
   /** A sell is a share of the position, so its percent is what the order carries. */
   const sellValue = $derived(((position?.valueUsd ?? 0) * (Number(amount) || 0)) / 100);
   const sellShown = $derived(selling ? (amount ? `${amount}%` : "0%") : `$${amount || "0"}`);
@@ -534,6 +575,30 @@
                 {option.label}
               </button>
             {/each}
+            <!--
+              The custom value, where the desktop has its own box. It is the same control as the
+              chips beside it, in an editable shape: typing a number is what selects it, so no
+              chip is on while it holds one, and choosing Auto empties it — both from the store
+              rather than from a flag kept beside it, which is what stops the two disagreeing.
+            -->
+            <span
+              class="small-chip slip"
+              class:small-chip--on={slippageAuto || slippageCustom}
+              aria-label={slippageAuto ? "Slippage: auto" : "Custom slippage"}
+            >
+              <input
+                class="slip-input m-num"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="Auto"
+                aria-label="Custom slippage percent"
+                bind:value={slippage}
+                onchange={commitSlippage}
+                onkeydown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+              />
+              {#if slippage !== ""}<span class="slip-sign">%</span>{/if}
+            </span>
           </span>
         </div>
         <div class="row">
@@ -764,6 +829,68 @@
     background: var(--m-card);
     color: var(--m-text);
     font-weight: 700;
+  }
+
+  /*
+   * The custom slippage: a chip with a box in it, sized for what it holds — three digits and a
+   * decimal at most ("100", "3.5"), or the word "Auto" when the store is on `AUTO`, which is what
+   * its placeholder says. The percent sign is drawn only beside a number: "Auto%" is not a value.
+   */
+  .slip {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 8px;
+  }
+
+  /* the box is the chip's own focus ring, so tapping it reads as tapping the chip */
+  .slip:focus-within {
+    border-color: var(--m-text);
+  }
+
+  .slip-input {
+    width: 40px;
+    padding: 0;
+    background: none;
+    border: 0;
+    outline: none;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    color: var(--m-text);
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  .slip-input::placeholder {
+    font-weight: 400;
+    color: var(--m-muted);
+  }
+
+  /*
+   * On `AUTO` the box is a selected chip that happens to be typeable: the word reads at the
+   * chip's own weight and colour, so "Auto is the setting" is visible rather than implied by an
+   * empty field. A preset's number is not selected here — the chip beside it is — so it stays
+   * quiet.
+   */
+  .slip.small-chip--on .slip-input::placeholder {
+    font-weight: 700;
+    color: var(--m-text);
+  }
+
+  /* the sign is part of the number a reader types, so it sits tight against it */
+  .slip-sign {
+    margin-left: -2px;
+  }
+
+  .slip-input::-webkit-outer-spin-button,
+  .slip-input::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+  }
+
+  .slip-sign {
+    font-size: 14px;
+    color: var(--m-muted);
   }
 
   .percents {
