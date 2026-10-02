@@ -14,7 +14,7 @@
   import { closeDeposit, closeWithdraw, isDepositOpen, isWithdrawOpen } from "./lib/sheets.svelte.js";
   import ProfilePage from "./pages/ProfilePage.svelte";
   import WelcomePopup from "./components/WelcomePopup.svelte";
-  import MobileGate from "./components/MobileGate.svelte";
+  import MobileApp from "./components/mobile/MobileApp.svelte";
   import ConnectPage from "./pages/ConnectPage.svelte";
   import TradePopup from "./components/TradePopup.svelte";
   import HoverCardLayer from "./components/hover/HoverCardLayer.svelte";
@@ -27,6 +27,7 @@
   import { chainSlug } from "./lib/routes.js";
   import { navigate } from "./lib/router.js";
   import { ensureEchoStream, echoQueryKey, echoVisibleRows } from "./lib/api/echo.svelte.js";
+  import { isPhone, startDevice } from "./lib/device.svelte.js";
 
   const url = $state({ pathname: window.location.pathname, search: window.location.search });
 
@@ -54,6 +55,8 @@
   const HOME_FALLBACK = "CuP5Ng85HiCdHiKnc9pKe9MVEVkJDHmMsyEvbXHopump";
 
   $effect(() => {
+    // The phone has a home of its own — the discovery list — so `/` stays `/` there.
+    if (isPhone()) return;
     if (url.pathname !== "/") return;
     ensureEchoStream(echoQueryKey());
     const first = echoVisibleRows()[0];
@@ -74,6 +77,8 @@
   // An existing session resumes on load, and a token that gets refreshed re-authenticates
   // the live socket instead of forcing a reconnect. (The account reads follow the session
   // from src/lib/api/account.svelte.js, which starts itself.)
+  $effect(() => startDevice());
+
   $effect(() => {
     initAuth();
     return onAuthTokenChange((next) => authenticate(next));
@@ -100,6 +105,11 @@
        box on purpose: it is a page for a phone, so it wants the window's own size and the
        window's own type. -->
   <ConnectPage />
+{:else if isPhone()}
+  <!-- The phone shell: the same routes, the same API modules, a different frame. It is
+       mounted instead of the desktop one rather than hidden beside it, so only one of
+       them is ever holding a socket. -->
+  <MobileApp {page} {chain} {address} wallet={profileWallet} />
 {:else}
 <div class="desktop-content">
   <!-- The fitted box: it is given the window's size divided by the scale and then scaled
@@ -152,6 +162,8 @@
 <HoverCardLayer />
 {/if}
 
-<WelcomePopup />
-
-<MobileGate />
+{#if !isPhone()}
+  <!-- The welcome is the desktop's: a two-column popup with a vertical video. The phone
+       gets its own pass at it rather than a shrunk copy. -->
+  <WelcomePopup />
+{/if}

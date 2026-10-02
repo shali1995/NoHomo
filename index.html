@@ -2,13 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- `viewport-fit=cover` is what makes the phone shell's safe-area insets real on iOS:
+         without it `env(safe-area-inset-top)` is always 0 and the header sits under the notch. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
     <!-- What a search engine and a link preview read. The title and description are ours now: the
          capture's title was the recorded token page, which told a crawler nothing. -->
     <title>NOHOMO — FOMO is gay. This isn't.</title>
     <meta name="description" content="FOMO is HOMO. If you use it, you're gay. NOHOMO is the open Solana terminal — targets, dip orders, your own gas, and ECHO ranking what actually moved. Built because nobody else would." />
-    <meta name="theme-color" content="#0b0b0f" />
+    <meta name="theme-color" content="#060510" />
     <meta name="color-scheme" content="dark" />
 
     <!-- Open Graph: the card X, Discord, Telegram and iMessage build from a shared link.

@@ -1,0 +1,92 @@
+/*
+ * The phone UI's own sheet of values.
+ *
+ * They are not new: every one of them is what the ported app paints, read off its captured
+ * styles (`styles.color`, `styles.backgroundColor`, radii, hairlines). The desktop app shares
+ * most of them through the Tailwind theme in app.css; the few that differ do so because the
+ * phone build of the app uses its own accent — `#4662fb` on the Deposit button where the
+ * desktop capture has `#516af6` — so the phone keeps them under its own names rather than
+ * quietly changing the desktop's.
+ *
+ * Sizes are dp. The capture laid the app out on a 900x1600 device screen at a density of
+ * 1.875, so one dp there is one CSS px here: the numbers in the components are the capture's
+ * numbers, unmodified, and the phone frame is the capture's 480 dp wide.
+ */
+.m-phone {
+  --m-bg: #060510;
+  --m-card: #12111a;
+  --m-card-2: #161522;
+  --m-text: #f7f7f7;
+  --m-muted: #9899a3;
+  --m-dim: #474b52;
+  --m-green: #04c249;
+  --m-red: #ff5121;
+  --m-blue: #4662fb;
+  --m-blue-soft: #5f85ff;
+  --m-blue-rim: #6f85ff;
+  --m-pink: #ff6fe9;
+  --m-warn: #ffc74f;
+  /* Every hairline in the app: 20/255 of #cbd0eb. */
+  --m-hairline: rgba(203, 208, 235, 0.078);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-family: Aeonik, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-phone *,
+.m-phone *::before,
+.m-phone *::after {
+  box-sizing: border-box;
+}
+
+.m-phone button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* The phone has no scrollbars to show: the capture's lists scroll without one. */
+.m-phone .m-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.m-phone .m-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.m-phone .m-rail {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.m-phone .m-rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* A number that changes while you look at it (prices, PnL) keeps its columns still. */
+.m-phone .m-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.m-phone .m-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

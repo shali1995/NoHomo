@@ -178,8 +178,35 @@ fomo.family sells you access to a closed box. This is the same box, open, on a b
 directly, with the fee going to the people running it instead of to a middleman. Fork it and the
 maths gets even better for you.
 
-**Known gaps:** mobile isn't built yet — the app says so if you open it on a phone. The chain picker
-is deliberately disabled. Trailing stops aren't wired.
+**Known gaps:** the perps tab is prepared but not open (the screen is there, the tab says so). The
+chain picker is deliberately disabled. Trailing stops aren't wired. Candles stop at 24h on both
+shells — the endpoint has nothing longer — so the phone's 7D/1M/ALL chips are drawn and disabled
+rather than pointed at data that does not exist. Theses are readable, never writable: the API's
+thesis route is a GET.
+
+---
+
+## 📱 The phone
+
+Open it on a phone and you get a phone app, not a squeezed desktop. Below 900 px the shell switches
+(`src/lib/device.svelte.js`) and a second frame takes over: a bar of tabs across the bottom, one
+screen at a time, sheets that slide up. Both shells read the same routes and the same
+`src/lib/api/*`, so a link works either way and there is only ever one of them mounted.
+
+The phone screens live in `src/components/mobile/`. They were ported from a screen-by-screen capture
+of the app the desktop chrome came from — every band, radius and hairline is the capture's, measured
+in the 480 dp the app was drawn at, and the look is verified against the capture's own screenshots.
+The data underneath is ours.
+
+What is on the phone: the tokens list with the live rankings and ECHO beside them, the token page
+with its candles, holders, calls and theses, the buy and sell sheet, the leaderboard and its follow
+list, the feed, search, your watchlist, your profile with the cash sheet, the rewards sheet, and the
+deposit and withdraw flows. The exit plan — the take profit and the stop loss a position is running —
+is set from the position card, and the levels are drawn on the chart where you drag them.
+
+Signing in on a phone works two ways, and which one you get is a fact about the browser you are in:
+inside a wallet's own browser the wallet signs for itself, and in any other browser the phone pairs
+with a desktop — the desktop's wallet menu shows a QR, and `/connect` takes the session.
 
 ---
 
