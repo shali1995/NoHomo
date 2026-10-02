@@ -24,6 +24,7 @@
 -->
 <script>
   import Liveline from "../../../lib/vendor/liveline/Liveline.svelte";
+  import { untrack } from "svelte";
   import { getFrame, hasMoreCandles, loadOlderCandles } from "../../../lib/api/chart.svelte.js";
   import { formatCompact, formatPrice, getToken } from "../../../lib/api/token.svelte.js";
   import { positionsFor } from "../../../lib/api/trade.svelte.js";
@@ -80,17 +81,71 @@
   const away = $derived(panSeconds > 0.5);
 
   /** The series in the shape the library draws: numbers, oldest first. */
-  const series = $derived(
-    (candles ?? [])
+  /**
+   * How many buckets the display series may bridge. Six windows: enough for everything on screen
+   * and everything a pan reaches, without turning an eleven-hour history of one-second candles
+   * into forty thousand bars.
+   */
+  const FILL_BUCKETS = VISIBLE_CANDLES * 6;
+
+  /**
+   * The series **as drawn** — continuous in time and in price. Nothing here is sent anywhere; the
+   * store's own candles are left exactly as they are.
+   *
+   * Two holes are bridged, because a chart with holes is not a chart:
+   *
+   *   - **time**: a bucket the exchange sent no candle for is drawn as a flat one at the last
+   *     traded price. A market that did not trade did not move, which is what a flat bar means,
+   *     and the alternative is the empty seconds a short frame is full of.
+   *   - **price**: each candle is drawn opening where the one before it closed. The socket's live
+   *     candles arrive with `open === close` while the REST history opens the same candle at its
+   *     predecessor's close, and a series that mixes the two draws dashes with vertical holes
+   *     between them. The close, the timestamp and the volume are the exchange's and are passed
+   *     through untouched; only the open is tied to its neighbour, and high/low are allowed to
+   *     reach it so the bar stays a bar.
+   */
+  const series = $derived.by(() => {
+    const width = frameSeconds;
+    const bucket = (seconds) => Math.floor(seconds / width) * width;
+    const real = (candles ?? [])
       .map((candle) => ({
         time: Number(candle.time),
         open: Number(candle.open),
         high: Number(candle.high),
         low: Number(candle.low),
-        close: Number(candle.close)
+        close: Number(candle.close),
+        volumeUsd: Number(candle.volumeUsd ?? 0)
       }))
       .filter((candle) => Number.isFinite(candle.time) && Number.isFinite(candle.close))
-  );
+      .sort((a, b) => a.time - b.time);
+    if (real.length === 0) return real;
+
+    const byBucket = new Map(real.map((candle) => [bucket(candle.time), candle]));
+    // the forming bucket belongs to the live candle, so the display series stops one bucket short
+    const lastBucket = bucket(Date.now() / 1000) - width;
+    const firstBucket = Math.max(bucket(real[0].time), lastBucket - (FILL_BUCKETS - 1) * width);
+
+    const out = [];
+    let carried = 0;
+    for (let time = firstBucket; time <= lastBucket; time += width) {
+      const candle = byBucket.get(time);
+      if (candle) {
+        const open = out.length > 0 ? out[out.length - 1].close : candle.open;
+        out.push({
+          ...candle,
+          open,
+          high: Math.max(candle.high, open),
+          low: Math.min(candle.low, open)
+        });
+        carried = candle.close;
+        continue;
+      }
+      // nothing traded in this bucket: the price stood still
+      if (!(carried > 0)) continue;
+      out.push({ time, open: carried, high: carried, low: carried, close: carried, volumeUsd: 0 });
+    }
+    return out;
+  });
 
   /** The same closes as a line, which is what the chart-type button switches to. */
   const closes = $derived(series.map((candle) => ({ time: candle.time, value: candle.close })));
@@ -132,21 +187,63 @@
    * forming candle apart, because that is what its live dot and its smooth open/high/low/close
    * interpolation work on.
    */
-  const liveCandle = $derived.by(() => {
-    if (series.length === 0) return undefined;
-    const newest = series[series.length - 1];
-    const price = liveMark > 0 ? liveMark : newest.close;
-    if (bucketStart(Date.now() / 1000) === bucketStart(newest.time)) {
-      return {
-        time: newest.time,
-        open: newest.open,
-        high: Math.max(newest.high, price),
-        low: Math.min(newest.low, price),
+  /**
+   * The bucket still forming, as a record rather than a reading.
+   *
+   * It opens where the display series ends — the same continuity the series keeps — and from then
+   * on only its close moves while its high and low take in what the bucket has seen. Rebuilt from
+   * each quote (`open: price, high: price, low: price, close: price`) it reset its own open every
+   * tick, so open always equalled close and it drew as a flat dash.
+   */
+  let forming = $state(null);
+
+  $effect(() => {
+    /** Only a quote or a candle can move a bucket on; the writes below are untracked. */
+    const price = liveMark;
+    const rows = series;
+    untrack(() => {
+      const start = bucketStart(Date.now() / 1000);
+      if (!(price > 0)) return;
+      const closes = rows.length > 0 ? rows[rows.length - 1].close : 0;
+      if (!forming || forming.time !== start) {
+        const open = closes > 0 ? closes : price;
+        forming = {
+          time: start,
+          open,
+          high: Math.max(open, price),
+          low: Math.min(open, price),
+          close: price
+        };
+        return;
+      }
+      forming = {
+        time: start,
+        open: forming.open,
+        high: Math.max(forming.high, price),
+        low: Math.min(forming.low, price),
         close: price
       };
-    }
-    const start = bucketStart(Date.now() / 1000);
-    return { time: start, open: price, high: price, low: price, close: price };
+    });
+  });
+
+  /** A new token or frame has buckets of its own. */
+  $effect(() => {
+    void address;
+    void frameSeconds;
+    untrack(() => (forming = null));
+  });
+
+  const liveCandle = $derived.by(() => {
+    const price = liveMark > 0 ? liveMark : (series[series.length - 1]?.close ?? 0);
+    if (!(price > 0)) return undefined;
+    if (!forming) return undefined;
+    return {
+      time: forming.time,
+      open: forming.open,
+      high: Math.max(forming.high, price),
+      low: Math.min(forming.low, price),
+      close: price
+    };
   });
 
   /** Nothing is still forming in the past, so a panned chart passes no live candle. */
