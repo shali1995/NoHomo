@@ -162,8 +162,6 @@
 <HoverCardLayer />
 {/if}
 
-{#if !isPhone()}
-  <!-- The welcome is the desktop's: a two-column popup with a vertical video. The phone
-       gets its own pass at it rather than a shrunk copy. -->
-  <WelcomePopup />
-{/if}
+<!-- The welcome stands on both: side by side with its video on a desktop, stacked on a phone.
+     One component, so the two cannot say different things. -->
+<WelcomePopup />

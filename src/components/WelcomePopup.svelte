@@ -62,7 +62,7 @@
     onclick={() => (muted = false)}
   >
     <div
-      class="bg-bg-primary rounded-3xl border border-bg-tertiary p-4 overflow-y-auto"
+      class="welcome-panel bg-bg-primary rounded-3xl border border-bg-tertiary p-4 overflow-y-auto"
       style="width: min(600px, calc(100vw - 1.5rem)); max-height: calc(100vh - 1.5rem);"
       role="dialog"
       aria-modal="true"
@@ -77,13 +77,16 @@
             controls
             autoplay
             loop
+            muted
             playsinline
+            webkit-playsinline
+            preload="metadata"
             onclick={() => (muted = false)}
           ></video>
           <!-- top right: it says which way the sound is, and it is the way to change it -->
           <button
             type="button"
-            class="absolute rounded-sm bg-black/70 text-text-primary p-1"
+            class="welcome-mute absolute rounded-sm bg-black/70 text-text-primary p-1"
             style="top: 6px; right: 6px;"
             aria-label={muted ? "Unmute" : "Mute"}
             onclick={() => (muted = !muted)}
@@ -163,7 +166,7 @@
 
       <button
         type="button"
-        class="w-full rounded-2xl py-3 text-sm font-bold bg-accent-primary text-text-primary hover:opacity-80 mt-3"
+        class="welcome-go w-full rounded-2xl py-4 text-base font-bold bg-accent-primary text-text-primary hover:opacity-90 mt-4"
         onclick={() => {
           muted = false;
           if (step === 1) step = 2;
@@ -191,9 +194,40 @@
       flex-direction: column;
       align-items: center;
     }
+    /* The clip is 9:16, so it keeps that shape instead of a letterboxed box, and it gives way to
+       the copy: the reader must be able to reach the button without hunting for it. */
     .welcome-video {
       width: 100%;
-      height: 300px;
+      max-height: 42vh;
+      aspect-ratio: 9 / 16;
+      object-fit: cover;
+    }
+  }
+
+  /* The phone's own screen: full height inside the status bar, and its own scroll. */
+  @media (max-width: 900px) {
+    .welcome-panel {
+      width: 100%;
+      max-height: calc(100dvh - 1rem);
+      padding: 14px;
+      border-radius: 22px;
+      overscroll-behavior: contain;
+    }
+    .welcome-mute {
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+    }
+    /* Within a thumb's reach however far the copy is scrolled. It keeps the accent blue: the
+       rule used to paint the page's own background over it, which is why it read as a black bar. */
+    .welcome-go {
+      position: sticky;
+      bottom: 0;
+      padding-bottom: 10px;
+      box-shadow: 0 -14px 22px rgba(6, 5, 16, 0.92);
     }
   }
 </style>
