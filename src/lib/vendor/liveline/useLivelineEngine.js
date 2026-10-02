@@ -1281,6 +1281,38 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
                         badgeRef.current.container.style.opacity = String(base * badgeFade * (1 - pauseProgress));
                     }
                 }
+                else if (cfg.showBadge) {
+                    /**
+                     * Local patch: the value pill, in candles as well as in line mode.
+                     *
+                     * The library draws this pill only once the chart has morphed into a line
+                     * (`lineModeProg > 0.5`) and hides it otherwise, so a reader of candles has no
+                     * figure on the right edge at all. Nothing about the pill is line-specific: it
+                     * wants a value, a direction and the layout, and the candles have all three. The
+                     * value is the forming candle's close — the market's own figure — and the
+                     * direction comes from the visible closes, exactly as it does in line mode.
+                     */
+                    const closes = effectiveVisible.map((candle) => ({ value: Number(candle.close) }));
+                    const candleValue = Number(
+                        smoothLive?.close ?? effectiveCandles[effectiveCandles.length - 1]?.close ?? cfg.value
+                    );
+                    if (Number.isFinite(candleValue) && candleValue > 0) {
+                        badgeYRef.current = updateBadgeDOM(badgeRef.current, cfg, layout, {
+                            smoothValue: candleValue,
+                            momentum: detectMomentum(closes),
+                            badgeY: badgeYRef.current,
+                            badgeColor: badgeColorRef.current,
+                            isWindowTransitioning,
+                            noMotion,
+                            ctx,
+                            dt: pausedDt,
+                            chartReveal,
+                        });
+                    }
+                    else {
+                        badgeRef.current.container.style.display = 'none';
+                    }
+                }
                 else {
                     badgeRef.current.container.style.display = 'none';
                 }
