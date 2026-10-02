@@ -10,6 +10,9 @@
   let { row, onclick } = $props();
 
   const up = $derived(row.dir === "\u25B2");
+  /** A trench row swaps the market cap for volume and the change for bonding progress. */
+  const meta = $derived(row.meta ?? (row.mcap ? `${row.mcap} MC` : ""));
+  const bonding = $derived(typeof row.bondedPct === "number");
 </script>
 
 <button type="button" class="row" {onclick}>
@@ -24,16 +27,28 @@
 
   <span class="left">
     <span class="symbol m-truncate">{row.symbol}</span>
-    <span class="mcap m-num">{row.mcap} MC</span>
+    <span class="mcap m-num">{meta}</span>
   </span>
 
   <span class="right">
     <span class="price m-num"
       >{row.pricePrefix}{#if row.sub}<sub>{row.sub}</sub>{/if}{row.priceSuffix}</span
     >
-    <span class="change m-num" class:up style="color: {up ? 'var(--m-green)' : 'var(--m-red)'}">
-      <span class="arrow">{row.dir}</span>{row.change}
-    </span>
+    {#if bonding}
+      <!-- The capture's own row has no bonding column; the desktop's Bonding pill has one, so
+           the progress takes the change's slot: a 48x4 track with the green fill the desktop
+           draws, and the same bare percentage beside it. -->
+      <span class="change bonding" aria-label="{row.bondedPct}% bonded">
+        <span class="track" aria-hidden="true">
+          <span class="fill" style="width: {row.bondedPct}%"></span>
+        </span>
+        <span class="m-num">{row.bondedPct}%</span>
+      </span>
+    {:else}
+      <span class="change m-num" class:up style="color: {up ? 'var(--m-green)' : 'var(--m-red)'}">
+        <span class="arrow">{row.dir}</span>{row.change}
+      </span>
+    {/if}
   </span>
 </button>
 
@@ -150,5 +165,28 @@
   .arrow {
     font-size: 8px;
     line-height: 9.1px;
+  }
+
+  /* The desktop's own bonding indicator, at the phone's scale: the pill's track is 48x4 with
+     the percentage's bare number beside it. */
+  .bonding {
+    gap: 6px;
+    color: var(--m-muted);
+  }
+
+  .track {
+    position: relative;
+    width: 48px;
+    height: 4px;
+    border-radius: 9999px;
+    overflow: hidden;
+    background: var(--m-hairline);
+  }
+
+  .fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 9999px;
+    background: var(--m-green);
   }
 </style>

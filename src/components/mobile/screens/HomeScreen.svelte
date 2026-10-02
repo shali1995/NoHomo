@@ -22,7 +22,19 @@
     stopScan
   } from "../../../lib/api/scan.svelte.js";
   import { getWindowLabel, railTraders } from "../../../lib/api/leaderboard.svelte.js";
+  import {
+    BONDING_PHASE,
+    GRADUATED_PHASE,
+    bondingRows,
+    graduatedRows,
+    isTrenchesLoading,
+    startTrenches,
+    stopTrenches
+  } from "../../../lib/api/trenches.svelte.js";
+  import { isListLoading, listRows, startListLive, stopListLive } from "../../../lib/api/lists.svelte.js";
+  import { listRowToToken, trenchRowToToken } from "../../../lib/mobile-rows.js";
   import { openMobileDeposit } from "../../../lib/mobile-sheets.svelte.js";
+  import { untrack } from "svelte";
 
   let { onopen, onopentrader } = $props();
 
@@ -33,21 +45,29 @@
   ];
 
   let tab = $state("tokens");
-  /**
-   * Echo is the fifth facet: it is not a scanner ranking but the live stream of what was
-   * bought, sold and talked about, so it brings its own filter rail and its own list rather
-   * than a fifth body for the same rows.
+
+  /*
+   * The facet row: the four scanner rankings, the two bonding phases, the two curated lists
+   * and Echo. Each family has its own module behind it (scanner, trenches, lists, echo), so
+   * the facet decides which one is streaming — one at a time, like the desktop panel's pills.
    */
-  let echo = $state(false);
-  const FACETS = [...SCAN_VIEWS, { id: "echo", label: "Echo" }];
+  const TROUGHS = [
+    { id: "bonding", label: "Bonding" },
+    { id: "bonded", label: "Bonded" },
+    { id: "crypto", label: "Crypto" },
+    { id: "stocks", label: "Stocks" }
+  ];
+  const FACETS = [...SCAN_VIEWS, ...TROUGHS, { id: "echo", label: "Echo" }];
+  const SCAN_IDS = SCAN_VIEWS.map((entry) => entry.id);
+  /** The curated-list sources, keyed by facet: Crypto is the majors list, Stocks the stocks. */
+  const LIST_KIND = { crypto: "majors", stocks: "stocks" };
+
+  let facet = $state(SCAN_VIEWS[0].id);
 
   function pickFacet(id) {
-    if (id === "echo") {
-      echo = true;
-      return;
-    }
-    echo = false;
-    selectScanView(id);
+    if (!FACETS.some((entry) => entry.id === id)) return;
+    facet = id;
+    if (SCAN_IDS.includes(id)) selectScanView(id);
   }
   const funded = $derived(accountLoaded());
 
@@ -72,14 +92,45 @@
     };
   });
 
+  /* One stream at a time: whichever family the facet belongs to is started, and the family
+     it replaced is stopped in the same run. The calls are untracked because they are
+     lifecycle actions — the facet is the only thing these effects should answer to. */
   $effect(() => {
-    startScan();
-    // Leaving the tab closes the stream; coming back re-opens it on the same facet.
+    if (!SCAN_IDS.includes(facet)) return;
+    untrack(startScan);
     return () => stopScan();
   });
 
-  const rows = $derived(scanRows());
-  const loading = $derived(isScanLoading());
+  $effect(() => {
+    if (facet !== "bonding" && facet !== "bonded") return;
+    untrack(() => {
+      void startTrenches();
+    });
+    return () => stopTrenches();
+  });
+
+  $effect(() => {
+    const kind = LIST_KIND[facet];
+    if (!kind) return;
+    untrack(() => startListLive(kind));
+    return () => stopListLive(kind);
+  });
+
+  const phase = $derived(facet === "bonding" ? BONDING_PHASE : GRADUATED_PHASE);
+  const listKind = $derived(LIST_KIND[facet] ?? null);
+
+  const rows = $derived.by(() => {
+    if (facet === "bonding") return bondingRows().map(trenchRowToToken);
+    if (facet === "bonded") return graduatedRows().map(trenchRowToToken);
+    if (listKind) return listRows(listKind).map(listRowToToken);
+    return scanRows();
+  });
+
+  const loading = $derived.by(() => {
+    if (facet === "bonding" || facet === "bonded") return isTrenchesLoading(phase);
+    if (listKind) return isListLoading(listKind);
+    return isScanLoading();
+  });
 </script>
 
 <div class="home">
@@ -130,17 +181,9 @@
     </div>
   {:else}
   <div class="body m-scroll">
-    <ScanChips
-      views={FACETS}
-      active={echo ? "echo" : scanView()}
-      onselect={pickFacet}
-      onclear={() => {
-        echo = false;
-        selectScanView("trending");
-      }}
-    />
+    <ScanChips views={FACETS} active={facet} onselect={pickFacet} onclear={() => pickFacet("trending")} />
 
-    {#if echo}
+    {#if facet === "echo"}
       <EchoList onopen={(row) => onopen?.(row)} onopentrader={(trader) => onopentrader?.(trader)} />
     {:else}
     <div class="list">
@@ -152,7 +195,7 @@
           </div>
         {/each}
       {:else}
-        {#each rows as row (row.pairAddress)}
+        {#each rows as row, index (row.pairAddress ?? row.key ?? index)}
           <TokenRow {row} onclick={() => onopen?.(row)} />
         {/each}
       {/if}
