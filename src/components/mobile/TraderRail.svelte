@@ -12,15 +12,32 @@
   let { title, subtitle, traders, onopen } = $props();
 
   const MEDALS = [MedalGold, MedalSilver, MedalBronze];
+
+  /**
+   * Whether a name can actually be read. A trader's label is free text and some of them are
+   * blank-but-not-empty — right-to-left marks, zero-width joiners, hair spaces — which draw
+   * as an empty line inside the card, so the card reads as a box with nothing in it.
+   */
+  const VISIBLE = /[^\s\u200b-\u200f\u2060\u2028\u2029\ufeff]/;
+  const readable = (trader) => VISIBLE.test(String(trader?.name ?? ""));
+
+  /**
+   * Only the cards with a name you can read. A trader whose label is blank draws a card with an
+   * empty first line — a face, a medal and a number with nobody attached to them — which is the
+   * "box with nothing in it" the rail used to show. The ranking is a top-N either way, so a
+   * nameless row is dropped rather than drawn.
+   */
+  const shown = $derived(traders.filter(readable));
 </script>
 
-<div class="rail m-rail">
+<div class="rail">
   <div class="head">
     <MedalGold class="h-5 w-5 shrink-0 text-text-secondary" />
     <span class="head-title">{title}{#if subtitle}<span class="head-sub">{subtitle}</span>{/if}</span>
   </div>
 
-  {#each traders as trader, index (trader.traderKey ?? trader.walletAddress ?? index)}
+  <div class="cards m-rail">
+  {#each shown as trader, index (trader.traderKey ?? trader.walletAddress ?? index)}
     <button type="button" class="card" onclick={() => onopen?.(trader)}>
       <div class="card-top">
         {#if trader.avatarImg}
@@ -43,15 +60,26 @@
       </div>
     </button>
   {/each}
+  </div>
 </div>
 
 <style>
+  /*
+   * The heading sits above the cards, not beside them — that is where the capture puts it
+   * (heading at y 157.3, the first card at 185.6, both at x 16). Laid out as one row, the
+   * heading took the first slot and left a 90 dp void under it before the cards began.
+   */
   .rail {
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     height: 117.9px;
     padding: 0 16px;
+  }
+
+  .cards {
+    display: flex;
     gap: 8px;
+    margin-top: 8.6px;
   }
 
   .head {
@@ -81,7 +109,6 @@
     flex-direction: column;
     width: 154.1px;
     height: 90.1px;
-    margin-top: 8.6px;
     border: 1px solid var(--m-hairline);
     border-radius: 12px;
     overflow: hidden;
