@@ -11,7 +11,6 @@
   is already the panel that says what the order will cost.
 -->
 <script>
-  import ArrowLeft from "../../../icons/arrow-left.svelte";
   import Chevron from "../../../icons/chevron-down.svelte";
   import Plus from "../../../icons/circle-plus.svelte";
   import VerifiedBadge from "../../../icons/verified-badge.svelte";
@@ -369,7 +368,16 @@
     -->
     <div class="back">
       <button type="button" aria-label="Back" onclick={closeMobileTrade}>
-        <ArrowLeft class="h-4 w-4" />
+        <!-- the token header's own chevron, so the two ways back are the same glyph -->
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M15 5 8 12l7 7"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </button>
     </div>
 
@@ -632,9 +640,15 @@
   }
 
   .back {
+    /*
+     * Left: the glyph's edge lands on 16, the token page's own inset — 8 + (40 - 24) / 2.
+     * Vertically: on the mark's centre line, which is where the token page's own chevron sits. The
+     * row's own middle (50%) is 5 dp below the mark, because the mark starts at the top of the row
+     * and the names hang under it — that is what made it read as low.
+     */
     position: absolute;
-    left: 4px;
-    top: 50%;
+    left: 8px;
+    top: 24.53px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -643,18 +657,24 @@
     transform: translateY(-50%);
   }
 
-  /*
-   * 40 dp of tap target with a 20 dp arrow at its centre. It used to be one line of a row of its
-   * own — 24.5 dp tall and 35% opaque, an arrow the reader had to look for on a line that existed
-   * only to hold it.
-   */
+  /* 40 dp of tap target, which is a target and not a drawing. */
   .back button {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 40px;
     height: 40px;
-    color: var(--m-text);
+  }
+
+  /*
+   * The glyph is the token page's own, at the token page's own measures: 24 x 24.5, the muted
+   * colour, dimmed to 35% the way the token page's own is. Same control, same weight, both places.
+   */
+  .back svg {
+    width: 24px;
+    height: 24.5px;
+    color: var(--m-muted);
+    opacity: 0.35;
   }
 
   .token {

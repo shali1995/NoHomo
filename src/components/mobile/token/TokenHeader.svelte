@@ -174,13 +174,18 @@
     --safe: env(safe-area-inset-top, 0px);
     position: relative;
     flex: 0 0 auto;
-    height: calc(84.3px + var(--safe));
+    /*
+     * The status bar's inset and the mark's own row, and no air besides: the content used to start
+     * 28 dp below the inset, so the header was 84 dp of which a third was empty — the same gap the
+     * trade sheet had above its back arrow, closed the same way.
+     */
+    height: calc(64px + var(--safe));
     background: var(--m-bg);
   }
 
   .back {
     position: absolute;
-    top: calc(40px + var(--safe));
+    top: calc(20px + var(--safe));
     left: 16px;
     display: flex;
     align-items: center;
@@ -197,7 +202,7 @@
 
   .logo {
     position: absolute;
-    top: calc(28.3px + var(--safe));
+    top: calc(8px + var(--safe));
     left: 48px;
     width: 48px;
     height: 48px;
@@ -225,7 +230,7 @@
 
   .identity {
     position: absolute;
-    top: calc(30.4px + var(--safe));
+    top: calc(10px + var(--safe));
     left: 108.3px;
     right: 104px;
   }
@@ -318,7 +323,7 @@
 
   .actions {
     position: absolute;
-    top: calc(40.5px + var(--safe));
+    top: calc(20px + var(--safe));
     right: 16px;
     display: flex;
     align-items: center;
