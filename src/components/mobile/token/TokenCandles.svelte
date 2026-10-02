@@ -69,6 +69,12 @@
 
   let panSeconds = $state(0);
   let zoom = $state(1);
+  /**
+   * Where the price scale sits vertically, as a fraction of its own height. The chart's own scale
+   * always fits the candles; a reader who zooms out to see a resting buy or a stop needs to be
+   * able to push the candles up or down to look at it, without moving the market.
+   */
+  let valueOffset = $state(0);
   const windowSeconds = $derived(baseWindow * zoom);
   /** Away from the live edge the chart stops following it, so the view holds still. */
   const away = $derived(panSeconds > 0.5);
@@ -158,6 +164,11 @@
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
   }
 
+  /** How far the scale may be pushed: three of its own heights, so it can never be lost. */
+  function clampShift(value) {
+    return Math.min(3, Math.max(-3, value));
+  }
+
   function down(event) {
     if (!box) return;
     // This runs on the way down, before the overlay sees anything. A level in hand, or a press
@@ -168,7 +179,23 @@
     // Only touch pans: on a pointer device liveline's own hover scrubbing stays the gesture.
     if (event.pointerType !== "touch") return;
     event.stopPropagation();
-    drag = { x: event.clientX, y: event.clientY, pan: panSeconds, zoom, moved: false, axis: null };
+    /**
+     * Where a vertical drag means what. On the price gutter — the labels down the right of the
+     * plot — it scales the scale; anywhere on the candles it moves them, so a chart being read can
+     * be pushed about without its zoom changing under the reader's hand.
+     */
+    const layout = layoutRef;
+    const onPriceAxis = layout ? event.clientX - box.getBoundingClientRect().left > layout.w - layout.pad.right : false;
+    drag = {
+      x: event.clientX,
+      y: event.clientY,
+      pan: panSeconds,
+      zoom,
+      value: valueOffset,
+      onPriceAxis,
+      moved: false,
+      axis: null
+    };
   }
 
   function move(event) {
@@ -184,15 +211,28 @@
      * also walk the window into the past — that is what left the chart stranded a minute behind
      * the market, needing a sideways drag to come home.
      */
-    if (!drag.axis) drag.axis = Math.abs(dx) > Math.abs(dy) ? "pan" : "zoom";
+    if (!drag.axis) {
+      // On the gutter the only thing a drag can mean is the scale; on the plot it is either axis.
+      drag.axis = drag.onPriceAxis ? "scale" : Math.abs(dx) > Math.abs(dy) ? "pan" : "shift";
+    }
+    if (drag.axis === "scale") {
+      // Down opens the window out, up closes it in — the axis a pinch would use.
+      zoom = clampZoom(drag.zoom * Math.exp(dy / ZOOM_TRAVEL));
+      return;
+    }
     if (drag.axis === "pan") {
       // The content follows the finger: right is further back, and the window keeps its width.
       const secondsPerPx = windowSeconds / (box?.clientWidth || 1);
       panSeconds = Math.max(0, drag.pan + dx * secondsPerPx);
-    } else {
-      // Down opens the window out, up closes it in — the axis a pinch would use.
-      zoom = clampZoom(drag.zoom * Math.exp(dy / ZOOM_TRAVEL));
+      return;
     }
+    /**
+     * Vertically the candle follows the finger: pull down and the scale moves up, which is how a
+     * resting buy below the market is brought into view. The shift is a share of the scale, so it
+     * stays put when the scale is later zoomed.
+     */
+    const plotHeight = layoutRef?.chartH || box?.clientHeight || 1;
+    valueOffset = clampShift(drag.value + dy / plotHeight);
   }
 
   /** Two bars of the window's width, in seconds: how near the edge counts as being on it. */
@@ -214,8 +254,10 @@
     const now = Date.now();
     if (now - lastTap < 320) {
       lastTap = 0;
+      // the way home: live, the frame's own scale, and the scale's own place
       panSeconds = 0;
       zoom = 1;
+      valueOffset = 0;
       return;
     }
     lastTap = now;
@@ -293,6 +335,7 @@
     lineValue={newestPrice}
     window={windowSeconds}
     viewOffset={panSeconds}
+    valueOffset={valueOffset}
     paused={away}
     referenceLine={{ value: newestPrice, label: formatAmount(newestPrice) }}
     formatValue={formatAmount}

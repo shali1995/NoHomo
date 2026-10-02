@@ -34,6 +34,18 @@ const MOMENTUM_COLOR_LERP = 0.12;
  * The library has no such notion of its own — it is a live trailing window — so the offset is
  * applied to the clock every place a right edge is computed from it.
  */
+/**
+ * Local patch: how far the price scale has been dragged up or down, as a fraction of its own
+ * range. The library has no such offset — its scale always fits the candles — so it is applied
+ * where the scale is turned into coordinates, which moves the candles, the grid, the labels, the
+ * reference lines and the crosshair together. A fraction rather than an amount, so the place a
+ * reader dragged to survives a zoom.
+ */
+function valueOffset(cfg) {
+  const value = Number(cfg?.valueOffset ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function viewOffset(cfg) {
   const value = Number(cfg?.viewOffset ?? 0);
   return Number.isFinite(value) && value > 0 ? value : 0;
@@ -1000,7 +1012,12 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
             rangeInitedRef.current = rangeResult.rangeInited;
             displayMinRef.current = rangeResult.displayMin;
             displayMaxRef.current = rangeResult.displayMax;
-            const { minVal, maxVal, valRange } = rangeResult;
+            const { minVal: rangeMin, maxVal: rangeMax, valRange: rangeRange } = rangeResult;
+            // the reader's own vertical place on the scale, as a share of its height
+            const valueShift = valueOffset(cfg) * rangeRange;
+            const minVal = rangeMin + valueShift;
+            const maxVal = rangeMax + valueShift;
+            const valRange = rangeRange;
             const layout = {
                 w, h, pad,
                 chartW, chartH,
@@ -1426,7 +1443,12 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
             rangeInitedRef.current = rangeResult.rangeInited;
             displayMinRef.current = rangeResult.displayMin;
             displayMaxRef.current = rangeResult.displayMax;
-            const { minVal, maxVal, valRange } = rangeResult;
+            const { minVal: rangeMin, maxVal: rangeMax, valRange: rangeRange } = rangeResult;
+            // the reader's own vertical place on the scale, as a share of its height
+            const valueShift = valueOffset(cfg) * rangeRange;
+            const minVal = rangeMin + valueShift;
+            const maxVal = rangeMax + valueShift;
+            const valRange = rangeRange;
             const layout = {
                 w, h, pad,
                 chartW, chartH,
@@ -1627,7 +1649,12 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
             rangeInitedRef.current = rangeResult.rangeInited;
             displayMinRef.current = rangeResult.displayMin;
             displayMaxRef.current = rangeResult.displayMax;
-            const { minVal, maxVal, valRange } = rangeResult;
+            const { minVal: rangeMin, maxVal: rangeMax, valRange: rangeRange } = rangeResult;
+            // the reader's own vertical place on the scale, as a share of its height
+            const valueShift = valueOffset(cfg) * rangeRange;
+            const minVal = rangeMin + valueShift;
+            const maxVal = rangeMax + valueShift;
+            const valRange = rangeRange;
             const layout = {
                 w, h, pad,
                 chartW, chartH,

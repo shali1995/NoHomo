@@ -21,6 +21,7 @@
     loading = false,
     paused = false,
     viewOffset = 0,
+    valueOffset = 0,
     emptyText,
     exaggerate = false,
     degen: degenProp,
@@ -332,6 +333,7 @@
       windowSecs: effectiveWindowSecs,
       // Local patch: seconds the view has been dragged back from the live edge.
       viewOffset: viewOffset ?? 0,
+      valueOffset: valueOffset ?? 0,
       lerpSpeed,
       showGrid: grid,
       showBadge,
