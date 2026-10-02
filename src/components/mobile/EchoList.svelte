@@ -161,14 +161,10 @@
       </div>
     {:else}
       {#each views as view (view.key)}
-        <!-- The whole row opens the token page, so the trader's name — the one thing in it
-             that is not the token — is its own trigger inside it. -->
-        {@const amount = view.flowLabel || view.primary}
-        {@const trader = view.wallets[0] ?? null}
-        <!-- The market cap is drawn on the left only when it is not already what the right
-             column says: `echoRowView` falls back to that headline for `talked`, whose
-             events carry no USD, and a number printed twice in one row reads as a bug. -->
-        {@const mcap = view.mcLabel && view.mcLabel !== amount ? view.mcLabel : ""}
+        <!-- The headline figure is the market cap, as the desktop's row headlines it; the flow
+             is the third line's own business and printing it here would say it twice. The flow
+             stands in only when there is no cap to show. -->
+        {@const amount = view.primary || view.flowLabel}
         <div
           class="row"
           role="link"
@@ -186,43 +182,64 @@
             <span class="rank m-num" title="Echo rank">{view.rank}</span>
           </span>
 
-          <span class="left">
-            <span class="symbol m-truncate">{view.name}</span>
-            <span class="meta">
-              {#if mcap}
-                <span class="mcap m-num">{mcap}</span>
-              {/if}
-              {#if mcap && (trader || view.ageLabel)}
-                <span class="dot">·</span>
-              {/if}
-              {#if trader}
-                <span
-                  class="trader m-truncate"
-                  role="link"
-                  tabindex="0"
-                  onclick={(event) => openTrader(trader, event)}
-                  onkeydown={(event) => {
-                    if (!activated(event)) return;
-                    event.preventDefault();
-                    openTrader(trader, event);
-                  }}>{trader.label}</span
-                >
-              {/if}
-              {#if trader && view.ageLabel}
-                <span class="dot">·</span>
-              {/if}
+          <!--
+            The desktop Echo row's three lines, in the phone's own type. A phone has no width
+            for a second column, so each line carries its own figures at its own end instead:
+            the token and what it is worth, then what Echo counted, then who moved it.
+          -->
+          <span class="body">
+            <span class="line line--head">
+              <span class="symbol m-truncate">{view.name}</span>
+              <span class="figures">
+                {#if amount}<span class="amount m-num">{amount}</span>{/if}
+                {#if view.changeLabel}
+                  <span class="change m-num" style="color: {changeColor(view.changeLabel)}"
+                    >{view.changeLabel}</span
+                  >
+                {/if}
+              </span>
+            </span>
+
+            <span class="line line--detail">
+              {#if view.detail}<span class="detail m-truncate">{view.detail}</span>{/if}
               {#if view.ageLabel}
-                <span class="age m-num" title={view.ageTitle}>{view.ageLabel}</span>
+                <span class="age m-num" title={view.ageTitle}>· {view.ageLabel}</span>
               {/if}
             </span>
-          </span>
 
-          <span class="right">
-            <span class="amount m-num">{amount}</span>
-            {#if view.changeLabel}
-              <span class="change m-num" style="color: {changeColor(view.changeLabel)}"
-                >{view.changeLabel}</span
-              >
+            {#if view.wallets.length > 0 || view.extraLabel || view.multipleLabel || view.flowLabel}
+              <span class="line line--flow">
+                {#each view.wallets as wallet (wallet.address)}
+                  <button
+                    type="button"
+                    class="wallet"
+                    title={wallet.label}
+                    aria-label={wallet.label}
+                    onclick={(event) => openTrader(wallet, event)}
+                  >
+                    {#if wallet.imageUrl}
+                      <img
+                        src={wallet.imageUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        onerror={useAppMark}
+                      />
+                    {:else}
+                      <span>{wallet.letter}</span>
+                    {/if}
+                  </button>
+                {/each}
+                {#if view.extraLabel}
+                  <span class="extra" title={view.extraTitle}>{view.extraLabel}</span>
+                {/if}
+                {#if view.multipleLabel}
+                  <span class="multiple" title={view.multipleTitle}>{view.multipleLabel}</span>
+                {/if}
+                {#if view.flowLabel}
+                  <span class="flow m-num">{view.flowLabel}</span>
+                {/if}
+              </span>
             {/if}
           </span>
         </div>
@@ -243,12 +260,18 @@
     margin-top: 11.7px;
   }
 
-  /* The capture's token row: a 48 dp disc, 16 dp gutters, 66.7 dp of height. */
+  /*
+   * The Echo row carries three lines where the scanner rows carry two, because Echo knows
+   * three things about a token — what it is worth, what was counted, and who moved it — and
+   * the desktop row is built the same way. Its figures and its disc are the desktop's own
+   * sizes, so the two surfaces read alike: a 52 dp disc, 14 dp for the token and its headline
+   * figure, 12 dp for everything counted. Nothing in the capture has an Echo view to match,
+   * so there is no captured row here to keep to.
+   */
   .row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     width: 100%;
-    height: 66.7px;
     padding: 8px 16px;
     text-align: left;
     background: var(--m-bg);
@@ -262,35 +285,35 @@
   .logo {
     position: relative;
     flex: 0 0 auto;
-    width: 48px;
-    height: 48px;
-    margin-right: 12px;
+    width: 52px;
+    height: 52px;
+    margin-right: 8px;
   }
 
   .logo img {
     display: block;
-    width: 48px;
-    height: 48px;
-    border-radius: 24px;
+    width: 52px;
+    height: 52px;
+    border-radius: 26px;
     border: 1px solid var(--m-hairline);
     object-fit: cover;
     background: var(--m-card);
   }
 
-  /* 18.2 dp on the disc's lower-right corner, over a 1 dp ring of the page colour — the
-     slot the scanner rows give their rosette, and the desktop Echo row gives the rank. */
+  /* 18 dp on the disc's lower-left corner, over a 1 dp ring of the page colour: the desktop
+     puts the rank there, and it never costs a column. */
   .rank {
     position: absolute;
-    right: -4px;
-    bottom: -2px;
+    left: -4px;
+    bottom: -4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 18.2px;
-    height: 18.2px;
-    padding: 0 4.3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
     border: 1px solid var(--m-bg);
-    border-radius: 9.1px;
+    border-radius: 9px;
     background: var(--m-card-2);
     font-size: 10px;
     font-weight: 700;
@@ -298,88 +321,123 @@
     color: var(--m-muted);
   }
 
-  /* Two lines a side, 8 dp apart, 50.7 dp of column, as the scanner rows have them. */
-  .left,
-  .right {
+  /* One column of three lines, 4 dp apart — the desktop's own `gap-1`. */
+  .body {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
-    gap: 8px;
-    height: 50.7px;
+    gap: 4px;
     min-width: 0;
   }
 
-  .left {
-    flex: 1 1 auto;
-    align-items: flex-start;
-    padding-top: 2.7px;
-  }
-
-  .right {
-    flex: 0 0 auto;
-    align-items: flex-end;
-  }
-
-  .symbol {
-    font-size: 18px;
-    line-height: 21.3px;
-    color: var(--m-text);
-  }
-
-  /* The market cap, then the trader and the age, on the line under the symbol. */
-  .meta {
+  .line {
     display: flex;
     align-items: center;
-    gap: 4.3px;
-    max-width: 100%;
+    gap: 4px;
     min-width: 0;
   }
 
-  .mcap,
-  .dot,
-  .age {
+  /* The figures sit at the line's end, the way the desktop's own `ml-auto` group does. */
+  .figures {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-left: auto;
     flex: 0 0 auto;
   }
 
-  .mcap {
+  .figures .amount {
     font-size: 14px;
-    line-height: 16.5px;
+    line-height: 16px;
+  }
+
+  /* Everything Echo counted is one step down from the token and its headline figure. */
+  .line--detail,
+  .line--flow {
+    font-size: 12px;
+    line-height: 14px;
     color: var(--m-muted);
   }
 
-  .dot {
-    font-size: 14px;
-    line-height: 16.5px;
-    color: var(--m-dim);
+  .line--flow {
+    overflow: hidden;
   }
 
-  /* The trader's name is a link inside the row's own link. */
-  .trader {
-    min-width: 0;
-    font-size: 14px;
-    line-height: 16.5px;
-    color: var(--m-muted);
-    cursor: pointer;
-  }
-
-  .trader:active {
-    color: var(--m-text);
+  .age,
+  .change {
+    flex: 0 0 auto;
   }
 
   .age {
-    font-size: 14px;
-    line-height: 16.5px;
     color: var(--m-dim);
-  }
-
-  .amount {
-    font-size: 18px;
-    line-height: 26.1px;
-    color: var(--m-text);
   }
 
   .change {
+    font-size: 12px;
+    line-height: 14px;
+  }
+
+  .amount {
+    color: var(--m-text);
+  }
+
+  /* The caller: 16 dp, ringed in the page colour so a run of them reads as separate faces. */
+  .wallet {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--m-bg);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--m-card-2);
+    font-size: 9px;
+    color: var(--m-muted);
+  }
+
+  .wallet img {
+    display: block;
+    width: 16px;
+    height: 16px;
+    object-fit: cover;
+  }
+
+  /* "+64": how many more callers Echo counted beyond the faces it can draw. */
+  .extra {
+    flex: 0 0 auto;
+    font-size: 12px;
+    line-height: 14px;
+    color: var(--m-dim);
+  }
+
+  /* The multiple since Echo first caught the token — a gain, so it reads green. */
+  .multiple {
+    flex: 0 0 auto;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: rgba(4, 194, 73, 0.16);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 14px;
+    color: var(--m-green);
+  }
+
+  .flow {
+    flex: 0 0 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The token's name, at the desktop's own size: `text-sm` over `leading-4`. */
+  .symbol {
     font-size: 14px;
-    line-height: 16.5px;
+    font-weight: 500;
+    line-height: 16px;
+    color: var(--m-text);
+    min-width: 0;
   }
 
   .strip {
