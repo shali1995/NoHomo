@@ -29,7 +29,8 @@
     targets.find((target) => target.kind === kind && target.trigger?.type === "PERCENT") ?? null;
 
   /** The plan the panel edits. Shut by default: a set plan needs no room to say what it is. */
-  const plan = $state({
+  // `let`, not `const`: the panel binds to it, and a constant cannot be bound
+  let plan = $state({
     open: false,
     takeProfit: { share: DEFAULT_WORD.TAKE_PROFIT, pct: "" },
     stopLoss: { share: DEFAULT_WORD.STOP_LOSS, pct: "" }
@@ -103,5 +104,5 @@
 </script>
 
 {#if targets.length || apply}
-  <BuyExitPlan {plan} {waiting} onchange={write} />
+  <BuyExitPlan bind:plan {waiting} onchange={write} />
 {/if}

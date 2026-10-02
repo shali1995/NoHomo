@@ -84,7 +84,8 @@
    * The exit plan the buy will carry. Nothing is written to the server before the order: the plan
    * is the buy's own body, so it is held here and read once, at submit.
    */
-  const plan = $state({
+  // `let`, not `const`: the panel binds to it, and a constant cannot be bound
+  let plan = $state({
     open: false,
     takeProfit: { share: "half", pct: "" },
     stopLoss: { share: "all", pct: "" }
@@ -214,7 +215,14 @@
 
   function toggleDetails() {
     details = !details;
+    // one panel at a time: the exit plan is the other one, and it owns its own open flag
+    if (details) plan.open = false;
   }
+
+  /** The exit plan and the order details are the same kind of panel: only one is ever open. */
+  $effect(() => {
+    if (plan.open) details = false;
+  });
 
   async function submit() {
     if (!signedIn) {
@@ -405,22 +413,78 @@
   </div>
 
   {#if !selling}
-    <BuyExitPlan {plan} />
+    <BuyExitPlan bind:plan />
   {/if}
 
-  {#if details}
-    <div class="details">
-      <div class="details-head">
-        <span class="details-title">Details</span>
-        <span class="details-fee">
-          {#if value > 0 && feeUsd != null}<span class="m-num">${feeUsd.toFixed(2)} fee</span>{/if}
-          <button type="button" class="chevron" aria-label="Close details" onclick={toggleDetails}>
-            <Chevron class="h-4 w-4" style="transform: rotate(180deg)" />
+  <div class="foot">
+    <div class="meta">
+      <span class="available">
+          {#if selling}
+            {#if position}<span class="m-num">${(position.valueUsd ?? 0).toFixed(2)} position</span>{/if}
+          {:else if cashKnown}
+            <span class="m-num">${cash.toFixed(2)} available</span>
+          {/if}
+          <button type="button" class="add" aria-label="Add cash" onclick={toggleDetails}>
+            <Plus class="h-4 w-4" />
           </button>
+        </span>
+        <span class="fee">
+          {#if value > 0 && feeUsd != null}<span class="m-num">${feeUsd.toFixed(2)} fee</span>{/if}
+        <button type="button" class="chevron" aria-label="Order details" onclick={toggleDetails}>
+          <Chevron class="h-4 w-4" />
+        </button>
+      </span>
+    </div>
+
+    <div class="control" class:control--ready={ready}>
+      {#if ready}
+        <div
+          class="track"
+          bind:this={track}
+          role="button"
+          tabindex="0"
+          aria-label={controlLabel}
+          onpointerdown={onSlideStart}
+          onpointermove={onSlideMove}
+          onpointerup={onSlideEnd}
+          onpointercancel={onSlideEnd}
+          onkeydown={onSlideKey}
+        >
+          <span class="track-title">{controlLabel}</span>
+          <span class="thumb" style="transform: translateX({slide}px)">
+            <span class="thumb-glyph">{"\u00BB"}</span>
+          </span>
+        </div>
+      {:else}
+        <button type="button" class="idle" onclick={submit}>
+          <span class="idle-square"><span class="thumb-glyph idle-glyph">{"\u00BB"}</span></span>
+          <span class="idle-label">{controlLabel}</span>
+        </button>
+      {/if}
+    </div>
+
+    {#if error}
+      <p class="error">{error}</p>
+    {/if}
+  </div>
+
+  <!--
+    The order's own numbers and settings, laid over the sheet rather than inside it: grown in the
+    flow they pushed the amount, the keys and the control down every time the chevron was tapped,
+    which is the same jump the exit plan used to make.
+  -->
+  {#if details}
+    <div class="scrim" role="presentation" onclick={toggleDetails}></div>
+    <div class="popup" role="dialog" aria-modal="true" aria-label="Order details">
+      <div class="popup-head">
+        <span class="popup-title">Details</span>
+        <span class="popup-right">
+          {#if value > 0 && feeUsd != null}<span class="m-num popup-fee">${feeUsd.toFixed(2)} fee</span>{/if}
+          <button type="button" class="done" onclick={toggleDetails}>Done</button>
         </span>
       </div>
 
-      <div class="details-body">
+<div class="details-body">
         <div class="row">
           <span class="row-label">Fee</span>
           <span class="row-value m-num">{feeUsd != null ? `$${feeUsd.toFixed(2)}` : "\u2014"}</span>
@@ -488,62 +552,6 @@
       </div>
     </div>
   {/if}
-
-  <div class="foot">
-    {#if !details}
-      <div class="meta">
-        <span class="available">
-          {#if selling}
-            {#if position}<span class="m-num">${(position.valueUsd ?? 0).toFixed(2)} position</span>{/if}
-          {:else if cashKnown}
-            <span class="m-num">${cash.toFixed(2)} available</span>
-          {/if}
-          <button type="button" class="add" aria-label="Add cash" onclick={toggleDetails}>
-            <Plus class="h-4 w-4" />
-          </button>
-        </span>
-        <span class="fee">
-          {#if value > 0 && feeUsd != null}<span class="m-num">${feeUsd.toFixed(2)} fee</span>{/if}
-          <button type="button" class="chevron" aria-label="Order details" onclick={toggleDetails}>
-            <Chevron class="h-4 w-4" />
-          </button>
-        </span>
-      </div>
-    {:else}
-      <div class="meta meta--spacer"></div>
-    {/if}
-
-    <div class="control" class:control--ready={ready}>
-      {#if ready}
-        <div
-          class="track"
-          bind:this={track}
-          role="button"
-          tabindex="0"
-          aria-label={controlLabel}
-          onpointerdown={onSlideStart}
-          onpointermove={onSlideMove}
-          onpointerup={onSlideEnd}
-          onpointercancel={onSlideEnd}
-          onkeydown={onSlideKey}
-        >
-          <span class="track-title">{controlLabel}</span>
-          <span class="thumb" style="transform: translateX({slide}px)">
-            <span class="thumb-glyph">{"\u00BB"}</span>
-          </span>
-        </div>
-      {:else}
-        <button type="button" class="idle" onclick={submit}>
-          <span class="idle-square"><span class="thumb-glyph idle-glyph">{"\u00BB"}</span></span>
-          <span class="idle-label">{controlLabel}</span>
-        </button>
-      {/if}
-    </div>
-
-    {#if error}
-      <p class="error">{error}</p>
-    {/if}
-  </div>
 </div>
 
 <style>
@@ -807,14 +815,6 @@
   }
 
   /* The details panel overlays the last keypad rows behind a fade, as the capture's does. */
-  .details {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 116px;
-    background: var(--m-bg);
-  }
-
   .details::before {
     content: "";
     position: absolute;
@@ -825,27 +825,6 @@
     background: linear-gradient(to top, var(--m-bg) 30%, rgba(19, 19, 19, 0));
   }
 
-  .details-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 18.67px;
-    margin: 0 16px;
-  }
-
-  .details-title {
-    font-size: 16px;
-    color: var(--m-text);
-  }
-
-  .details-fee {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 16px;
-    color: var(--m-text);
-  }
-
   .chevron {
     color: var(--m-dim);
   }
@@ -853,10 +832,69 @@
   .details-body {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin: 12px 16px 0;
-    padding-top: 12px;
-    border-top: 1px solid var(--m-hairline);
+    gap: 14px;
+  }
+
+  /*
+   * The order-details panel, the exit plan's own anatomy: a scrim, a card pinned to the bottom
+   * above the safe area, a title with Done, and the rows inside. Capped and scrollable, because
+   * the chips and the toggle make it the taller of the two panels on a short screen.
+   */
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(6, 6, 12, 0.55);
+  }
+
+  .popup {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 41;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 76%;
+    overflow-y: auto;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+    background: var(--m-card);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .popup-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .popup-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--m-text);
+  }
+
+  .popup-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .popup-fee {
+    font-size: 16px;
+    color: var(--m-muted);
+  }
+
+  .done {
+    padding: 0;
+    background: none;
+    border: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--m-text);
+    cursor: pointer;
   }
 
   .row {
@@ -930,10 +968,6 @@
     height: 18.67px;
     font-size: 16px;
     color: var(--m-muted);
-  }
-
-  .meta--spacer {
-    height: 12px;
   }
 
   .available,
