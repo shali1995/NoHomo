@@ -348,31 +348,42 @@
     color: var(--m-text);
   }
 
-  /* The plan's chips: a green take profit, a red stop, spread across the card. */
+  /*
+   * The plan's chips: a green take profit and a red stop, spread across the card.
+   *
+   * These are the desktop's own colours, not the phone palette's — `--color-green-transparent`
+   * is #21c95e at 20% with #21c95e for its ink, and red is #ff622e in both places. The two
+   * surfaces show the same pills, so they read the same on both.
+   */
   .pills {
     display: grid;
     gap: 8px;
     margin-top: 10px;
   }
 
-  .pill--target {
-    background: rgba(4, 194, 73, 0.16);
+  /*
+   * Both class names on purpose: the base `.pill` below carries the dip's own colour, and a
+   * single-class variant would lose to it on nothing more than source order — which is exactly
+   * how a take profit spent a while painted yellow. Two classes cannot be beaten by order.
+   */
+  .pill.pill--target {
+    background: #21c95e33;
   }
 
-  .pill--stop {
-    background: rgba(255, 81, 33, 0.16);
+  .pill.pill--stop {
+    background: #ff622e33;
   }
 
-  .pill--target .pill-tag,
-  .pill--target .pill-label,
-  .pill--target .pill-note {
-    color: var(--m-green);
+  .pill.pill--target .pill-tag,
+  .pill.pill--target .pill-label,
+  .pill.pill--target .pill-note {
+    color: #21c95e;
   }
 
-  .pill--stop .pill-tag,
-  .pill--stop .pill-label,
-  .pill--stop .pill-note {
-    color: var(--m-red);
+  .pill.pill--stop .pill-tag,
+  .pill.pill--stop .pill-label,
+  .pill.pill--stop .pill-note {
+    color: #ff622e;
   }
 
   /* The dip pill: yellow, as the desktop draws it and as its line on the chart reads. */
@@ -386,19 +397,19 @@
     padding: 5px 8px;
     border: 0;
     border-radius: 10px;
-    background: rgba(255, 199, 79, 0.16);
+    background: #e1b0481f;
     cursor: pointer;
   }
 
   .pill--asking {
-    background: rgba(255, 199, 79, 0.3);
+    background: #e1b0483d;
   }
 
   .pill-tag,
   .pill-label {
     font-size: 12px;
     font-weight: 700;
-    color: var(--m-warn);
+    color: #ffbf17;
   }
 
   .pills .pill {
@@ -408,7 +419,7 @@
 
   .pill-note {
     font-size: 12px;
-    color: var(--m-warn);
+    color: #ffbf17;
     opacity: 0.5;
   }
 
@@ -421,7 +432,7 @@
   .pill-spin {
     width: 12px;
     height: 12px;
-    border: 2px solid var(--m-warn);
+    border: 2px solid #ffbf17;
     border-top-color: transparent;
     border-radius: 50%;
     animation: pill-spin 0.8s linear infinite;

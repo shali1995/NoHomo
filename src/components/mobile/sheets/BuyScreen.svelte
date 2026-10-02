@@ -38,6 +38,8 @@
     setTradeSettings
   } from "../../../lib/api/trade.svelte.js";
   import { addToast } from "../../../lib/toast.svelte.js";
+  import { exitPlanTargets } from "../../../lib/api/trade.svelte.js";
+  import BuyExitPlan from "./BuyExitPlan.svelte";
   import { closeMobileTrade } from "../../../lib/mobile-sheets.svelte.js";
 
   /**
@@ -77,6 +79,16 @@
   let amount = $state("");
   let dip = $state(0);
   let details = $state(false);
+
+  /**
+   * The exit plan the buy will carry. Nothing is written to the server before the order: the plan
+   * is the buy's own body, so it is held here and read once, at submit.
+   */
+  const plan = $state({
+    open: false,
+    takeProfit: { share: "half", pct: "" },
+    stopLoss: { share: "all", pct: "" }
+  });
   let slide = $state(0);
   let dragging = $state(false);
   /** Ours, not the store's: `isTrading()` is also true while the store reads positions. */
@@ -104,7 +116,16 @@
   const cashKnown = $derived(!signedIn || accountLoaded());
   const value = $derived(Number(amount) || 0);
   const presets = $derived(tradePresets().buy);
+  /**
+   * `tradeFee()` is the whole estimate — `{ gasFeeUsd, gasFeeUsdStr, gasFeeNative, … }` — and
+   * printing it directly was `Number(object)`, which is NaN. The USD figure is the one a buy
+   * card shows, so that is the one read.
+   */
   const fee = $derived(tradeFee());
+  const feeUsd = $derived.by(() => {
+    const usd = Number(fee?.gasFeeUsd);
+    return Number.isFinite(usd) ? usd : null;
+  });
   const settings = $derived(tradeSettings());
   const trading = $derived(sending);
   const error = $derived(tradeError());
@@ -216,24 +237,42 @@
       const result = await sell({ name: symbol, address, pct: Number(amount) });
       sending = false;
       if (result?.error) {
-        addToast(result.error, "error");
+        addToast("error", result.error);
         return;
       }
-      addToast(`Sold ${amount}% of ${symbol}`, "success");
+      addToast("success", `Sold ${amount}% of ${symbol}`);
       onclose();
       return;
     }
     const strategy = dip === 0 ? { type: "MARKET" } : { type: "DIP", dipPct: dip };
-    const result = await buy({ name: symbol, address, chain, usd: value, targets: [], strategy });
-    sending = false;
-    if (result?.error) {
-      addToast(result.error, "error");
+    /**
+     * The plan rides the buy, and a row that cannot be sent stops it and says why: the API drops
+     * such a row silently, which is the one thing the desktop refuses to copy and this does too.
+     */
+    const { targets, error: planError } = exitPlanTargets({
+      takeProfit: plan.takeProfit,
+      stopLoss: plan.stopLoss
+    });
+    if (planError) {
+      addToast("warning", "Exit plan not sent", planError, 6000);
+      plan.open = true;
+      sending = false;
       return;
     }
-    addToast(
-      dip === 0 ? `Bought ${symbol}` : `Dip placed ${dip}% below market`,
-      "success"
-    );
+    const result = await buy({
+      name: symbol,
+      address,
+      chain,
+      usd: value,
+      targets: targets ?? [],
+      strategy
+    });
+    sending = false;
+    if (result?.error) {
+      addToast("error", result.error);
+      return;
+    }
+    addToast("success", dip === 0 ? `Bought ${symbol}` : `Dip placed ${dip}% below market`);
     onclose();
   }
 
@@ -360,12 +399,16 @@
     {/each}
   </div>
 
+  {#if !selling}
+    <BuyExitPlan {plan} />
+  {/if}
+
   {#if details}
     <div class="details">
       <div class="details-head">
         <span class="details-title">Details</span>
         <span class="details-fee">
-          {#if value > 0 && fee != null}<span class="m-num">${Number(fee).toFixed(2)} fee</span>{/if}
+          {#if value > 0 && feeUsd != null}<span class="m-num">${feeUsd.toFixed(2)} fee</span>{/if}
           <button type="button" class="chevron" aria-label="Close details" onclick={toggleDetails}>
             <Chevron class="h-4 w-4" style="transform: rotate(180deg)" />
           </button>
@@ -375,7 +418,7 @@
       <div class="details-body">
         <div class="row">
           <span class="row-label">Fee</span>
-          <span class="row-value m-num">{fee != null ? `$${Number(fee).toFixed(2)}` : "\u2014"}</span>
+          <span class="row-value m-num">{feeUsd != null ? `$${feeUsd.toFixed(2)}` : "\u2014"}</span>
         </div>
         <div class="row">
           <span class="row-label">{selling ? "Estimated proceeds" : "Estimated output"}</span>
@@ -455,7 +498,7 @@
           </button>
         </span>
         <span class="fee">
-          {#if value > 0 && fee != null}<span class="m-num">${Number(fee).toFixed(2)} fee</span>{/if}
+          {#if value > 0 && feeUsd != null}<span class="m-num">${feeUsd.toFixed(2)} fee</span>{/if}
           <button type="button" class="chevron" aria-label="Order details" onclick={toggleDetails}>
             <Chevron class="h-4 w-4" />
           </button>
