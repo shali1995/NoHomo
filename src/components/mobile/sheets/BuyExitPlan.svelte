@@ -18,7 +18,7 @@
   import Chevron from "../../../icons/chevron-down.svelte";
   import { sellPctShare, TARGET_SHARES } from "../../../lib/api/trade.svelte.js";
 
-  let { plan } = $props();
+  let { plan, onchange = null, waiting = false } = $props();
 
   /** The three words a row cycles through, in the desktop's own order. */
   const SHARES = ["half", "quarter", "all"];
@@ -30,6 +30,13 @@
     const row = plan[kind];
     const index = SHARES.indexOf(String(row.share));
     row.share = index === -1 ? "half" : SHARES[(index + 1) % SHARES.length];
+    onchange?.(kind);
+  }
+
+  /** A percent box, left: the plan holds what was typed, and the caller hears about it. */
+  function type(kind, value) {
+    plan[kind].pct = String(value ?? "").trim();
+    onchange?.(kind);
   }
 
   /** What the header says when the plan is not empty: the same sentence the desktop prints. */
@@ -64,7 +71,7 @@
         <div class="row">
           <div class="left">
             <span class="label">{row.label}</span>
-            <button type="button" class="share" onclick={() => cycle(row.kind)}>
+            <button type="button" class="share" disabled={waiting} onclick={() => cycle(row.kind)}>
               {word(row.kind)}
             </button>
           </div>
@@ -79,7 +86,10 @@
               step="0.1"
               placeholder={row.placeholder}
               aria-label={`${row.label} percent`}
-              bind:value={plan[row.kind].pct}
+              disabled={waiting}
+              value={plan[row.kind].pct}
+              oninput={(event) => (plan[row.kind].pct = event.currentTarget.value)}
+              onchange={(event) => type(row.kind, event.currentTarget.value)}
             />
             <span class="sign">%</span>
           </span>
@@ -92,7 +102,6 @@
 <style>
   .plan {
     margin: 0 16px;
-    border-top: 1px solid var(--m-hairline);
   }
 
   .head {
