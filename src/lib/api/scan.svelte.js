@@ -29,12 +29,17 @@ const ROWS = 40;
 const SCANNER_TOPIC = "scanner:tokens";
 /** How long to wait before re-asking after a failed page or an expired cursor. */
 const RETRY_MS = 3000;
+/**
+ * How long a stream may stay silent before it is treated as dead. The socket client has its
+ * own reconnect and recovery probe, but a subscription that is silently gone looks exactly
+ * like a quiet market — and a list that stops moving is the one thing this module exists to
+ * prevent — so silence past this is answered by re-reading the page, which re-opens the
+ * subscription on the cursor that comes back with it.
+ */
+const QUIET_MS = 45000;
 
 export const SCAN_VIEWS = [
-  { id: "trending", label: "Trending", view: "trending", rankBy: "trending", path: `/v2/scanner/tokens/trending/${TIMEFRAME}` },
-  { id: "gainers", label: "Gainers", view: "topGainers", rankBy: "price24H", path: `/v2/scanner/tokens/top-gainers/${TIMEFRAME}` },
-  { id: "volume", label: "Volume", view: "topVolume", rankBy: "volume", path: `/v2/scanner/tokens/top-volume/${TIMEFRAME}` },
-  { id: "new", label: "New", view: "new", rankBy: "age", path: "/v2/scanner/tokens/new" }
+  { id: "trending", label: "Trending", view: "trending", rankBy: "trending", path: `/v2/scanner/tokens/trending/${TIMEFRAME}` }
 ];
 
 let view = $state("trending");
@@ -44,15 +49,33 @@ let cursor = $state(null);
 let loading = $state(true);
 let wsKey = null;
 let started = false;
+let retryTimer = null;
+let quietTimer = null;
+/** When a frame last arrived; the quiet timer reads this, not the clock it was armed on. */
+let lastFrameAt = 0;
 
 /** One snapshot per view, so switching back is instant instead of blank. */
 const cache = new Map();
+/** And the cursor each view's snapshot was taken on, so its socket can be re-opened. */
+const heldCursors = new Map();
 
 const frames = createCoalescer((batch) => {
   let working = tokens;
   for (const frame of batch) working = mergeScannerFrame(frame.event, frame.data, working);
   tokens = working;
+  cache.set(view, working);
+  noteFrame();
 });
+
+/** A frame arrived: the stream is alive, so the quiet timer starts again. */
+function noteFrame() {
+  lastFrameAt = Date.now();
+  if (quietTimer) clearTimeout(quietTimer);
+  quietTimer = setTimeout(() => {
+    quietTimer = null;
+    if (started && Date.now() - lastFrameAt >= QUIET_MS) void seed();
+  }, QUIET_MS + 1000);
+}
 
 export function scanView() {
   return view;
@@ -71,6 +94,8 @@ export function selectScanView(id) {
   if (!SCAN_VIEWS.some((entry) => entry.id === id)) return;
   if (view !== id) view = id;
   const stored = cache.get(id);
+  const held = heldCursors.get(id) ?? null;
+  cursor = held;
   if (stored) {
     tokens = stored;
     loading = false;
@@ -80,7 +105,6 @@ export function selectScanView(id) {
   // Written only when it differs: a fresh `[]` is a new reference every time, and a caller
   // that reads this state (an effect) would then re-run on its own write.
   if (tokens.length > 0) tokens = [];
-  if (cursor !== null) cursor = null;
   loading = true;
   void seed();
 }
@@ -115,6 +139,10 @@ function body() {
 async function seed() {
   const entry = SCAN_VIEWS.find((item) => item.id === view);
   const asked = entry.id;
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
   try {
     const { data, error } = await api.POST(entry.path, { body: body() });
     if (error) throw new Error("scanner request failed");
@@ -122,14 +150,21 @@ async function seed() {
     if (view !== asked) return;
     tokens = data?.tokens ?? [];
     cursor = data?.cursor ?? null;
+    heldCursors.set(asked, cursor);
     cache.set(asked, tokens);
     loading = false;
     openSubscription();
+    noteFrame();
   } catch {
     if (view !== asked) return;
     loading = false;
-    setTimeout(() => {
-      if (view === asked && tokens.length === 0) void seed();
+    // A page can fail and the socket still be the way back: re-open on the cursor in hand,
+    // then keep asking. The desktop panel does the same, and it is what stops one bad round
+    // trip from leaving the list dead until a reload.
+    if (cursor) openSubscription();
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      if (view === asked && started) void seed();
     }, RETRY_MS);
   }
 }
@@ -153,6 +188,7 @@ function openSubscription() {
   if (wsKey) unsubscribe(wsKey);
   frames.clear();
   if (!cursor) return;
+  noteFrame();
   wsKey = subscribe(
     SCANNER_TOPIC,
     (event, data) => {

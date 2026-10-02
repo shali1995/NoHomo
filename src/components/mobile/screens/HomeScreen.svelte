@@ -57,12 +57,14 @@
     { id: "crypto", label: "Crypto" },
     { id: "stocks", label: "Stocks" }
   ];
-  const FACETS = [...SCAN_VIEWS, ...TROUGHS, { id: "echo", label: "Echo" }];
+  // Echo leads: it is the app's own ranking, and the capture's own row of pills kept the
+  // thing that is ours first.
+  const FACETS = [{ id: "echo", label: "Echo" }, ...SCAN_VIEWS, ...TROUGHS];
   const SCAN_IDS = SCAN_VIEWS.map((entry) => entry.id);
   /** The curated-list sources, keyed by facet: Crypto is the majors list, Stocks the stocks. */
   const LIST_KIND = { crypto: "majors", stocks: "stocks" };
 
-  let facet = $state(SCAN_VIEWS[0].id);
+  let facet = $state("echo");
 
   function pickFacet(id) {
     if (!FACETS.some((entry) => entry.id === id)) return;
