@@ -60,17 +60,14 @@
 </script>
 
 <div class="m-phone">
-  {#if pushed === "token"}
-    <TokenScreen
-      {chain}
-      {address}
-      onback={back}
-      onopenbuy={() => openMobileTrade("buy")}
-      onopensell={() => openMobileTrade("sell")}
-    />
-  {:else if pushed === "profile"}
-    <ProfileScreen wallet={wallet} pushed onback={back} onopen={openRow} />
-  {:else}
+  <!--
+    The tabs stay mounted under whatever is pushed over them: a token page and the profile are laid
+    on top of this rather than swapped for it. Swapping unmounted the screen the reader came from,
+    and everything it held — which facet, which tab, how far down the list was, and the Echo list's
+    own rows — went with it, so going back landed on Echo at the top. Laid over, it is all still
+    there and nothing has to be saved and put back.
+  -->
+  <div class="root" class:root--away={!!pushed}>
     <section class="stage">
       {#if tab === "home"}
         <HomeScreen onopen={openRow} onopentrader={openTrader} />
@@ -85,6 +82,22 @@
       {/if}
     </section>
     <MobileNav {tab} onselect={(id) => (tab = id)} />
+  </div>
+
+  {#if pushed === "token"}
+    <div class="pushed">
+      <TokenScreen
+        {chain}
+        {address}
+        onback={back}
+        onopenbuy={() => openMobileTrade("buy")}
+        onopensell={() => openMobileTrade("sell")}
+      />
+    </div>
+  {:else if pushed === "profile"}
+    <div class="pushed">
+      <ProfileScreen wallet={wallet} pushed onback={back} onopen={openRow} />
+    </div>
   {/if}
 
   {#if isMobileDepositOpen()}
@@ -124,6 +137,33 @@
     position: absolute;
     inset: 0;
     z-index: 40;
+  }
+
+  .root {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /*
+   * Out of sight, still laid out. `display: none` is the obvious way to take a screen away and the
+   * wrong one here: a box that is not laid out loses the scroll offset of everything inside it, so
+   * the list would come back at the top — which is half of what this is fixing.
+   */
+  .root--away {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* The pushed screen owns the shell edge to edge, over the tabs it was opened from. */
+  .pushed {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    background: var(--m-bg);
   }
 
   .stage {
