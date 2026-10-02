@@ -57,6 +57,11 @@
   const MAX_ZOOM = 4;
   /** A finger has to move this far before a drag is a pan rather than a tap. */
   const SLOP = 6;
+  /**
+   * How near the live edge a drag has to end to be taken as "at the live edge". Two bars: a
+   * finger that wobbles sideways while zooming must not leave the chart stranded in the past.
+   */
+  const SNAP_BARS = 2;
 
   const frameSeconds = $derived(FRAME_SECONDS[getFrame()] ?? 60);
   /** The frame's own window, which is what the zoom is a multiple of. */
@@ -163,7 +168,7 @@
     // Only touch pans: on a pointer device liveline's own hover scrubbing stays the gesture.
     if (event.pointerType !== "touch") return;
     event.stopPropagation();
-    drag = { x: event.clientX, y: event.clientY, pan: panSeconds, zoom, moved: false };
+    drag = { x: event.clientX, y: event.clientY, pan: panSeconds, zoom, moved: false, axis: null };
   }
 
   function move(event) {
@@ -173,18 +178,38 @@
     const dy = event.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) < SLOP) return;
     drag.moved = true;
-    // The content follows the finger: right is further back, and the window keeps its width.
-    const secondsPerPx = windowSeconds / (box?.clientWidth || 1);
-    panSeconds = Math.max(0, drag.pan + dx * secondsPerPx);
-    // Down opens the window out, up closes it in — the axis a pinch would use.
-    zoom = clampZoom(drag.zoom * Math.exp(dy / ZOOM_TRAVEL));
+    /**
+     * A gesture is one thing or the other, decided once by which way it first travelled. A
+     * finger dragged up or down is zooming, and the sideways wobble that comes with it must not
+     * also walk the window into the past — that is what left the chart stranded a minute behind
+     * the market, needing a sideways drag to come home.
+     */
+    if (!drag.axis) drag.axis = Math.abs(dx) > Math.abs(dy) ? "pan" : "zoom";
+    if (drag.axis === "pan") {
+      // The content follows the finger: right is further back, and the window keeps its width.
+      const secondsPerPx = windowSeconds / (box?.clientWidth || 1);
+      panSeconds = Math.max(0, drag.pan + dx * secondsPerPx);
+    } else {
+      // Down opens the window out, up closes it in — the axis a pinch would use.
+      zoom = clampZoom(drag.zoom * Math.exp(dy / ZOOM_TRAVEL));
+    }
   }
+
+  /** Two bars of the window's width, in seconds: how near the edge counts as being on it. */
+  const snapSeconds = $derived((windowSeconds / VISIBLE_CANDLES) * SNAP_BARS);
 
   function up(event) {
     if (!drag) return;
     event.stopPropagation();
     const wasTap = !drag.moved;
+    const axis = drag.axis;
     drag = null;
+    if (!wasTap && axis === "pan") {
+      // Released within a whisker of the live edge: take it as the live edge, so the chart
+      // follows the market again instead of sitting just short of it.
+      if (panSeconds < snapSeconds) panSeconds = 0;
+      return;
+    }
     if (!wasTap) return;
     const now = Date.now();
     if (now - lastTap < 320) {
