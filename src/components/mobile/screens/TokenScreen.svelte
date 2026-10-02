@@ -54,6 +54,7 @@
    */
   const FRAMES = [
     { label: "1s", frame: "1s" },
+    { label: "5s", frame: "5s" },
     { label: "15s", frame: "15s" },
     { label: "1m", frame: "1m" },
     { label: "5m", frame: "5m" },
