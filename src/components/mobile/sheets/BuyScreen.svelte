@@ -312,13 +312,18 @@
 </script>
 
 <div class="buy">
-  <div class="back">
-    <button type="button" aria-label="Back" onclick={closeMobileTrade}>
-      <ArrowLeft class="h-4 w-4" />
-    </button>
-  </div>
-
   <div class="token">
+    <!--
+      The way out sits on the token's own row, beside its mark, rather than owning a row above it.
+      A 25 dp band of an 853 dp screen is the difference between the sheet fitting a small phone
+      and not, and it was the emptiest line in it.
+    -->
+    <div class="back">
+      <button type="button" aria-label="Back" onclick={closeMobileTrade}>
+        <ArrowLeft class="h-4 w-4" />
+      </button>
+    </div>
+
     <div class="logo">
       {#if logo}
         <img src={logo} alt="" />
@@ -548,21 +553,35 @@
     display: flex;
     flex-direction: column;
     background: var(--m-bg);
-    padding-top: 24px;
+    /* the status bar's inset and nothing more: 24 dp of air above the back arrow was the emptiest
+       space in the sheet */
+    padding-top: calc(6px + env(safe-area-inset-top));
   }
 
   .back {
-    height: 24.53px;
-    margin-right: 8px;
-    padding-left: 4px;
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    transform: translateY(-50%);
   }
 
+  /*
+   * 40 dp of tap target with a 20 dp arrow at its centre. It used to be one line of a row of its
+   * own — 24.5 dp tall and 35% opaque, an arrow the reader had to look for on a line that existed
+   * only to hold it.
+   */
   .back button {
     display: flex;
     align-items: center;
-    height: 24.53px;
-    color: var(--m-muted);
-    opacity: 0.35;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    color: var(--m-text);
   }
 
   .token {
@@ -574,7 +593,7 @@
   .logo {
     position: absolute;
     top: 0.53px;
-    left: 16px;
+    left: 48px;
     width: 48px;
     height: 48px;
   }
@@ -610,7 +629,7 @@
   .names {
     position: absolute;
     top: 3.73px;
-    left: 76.27px;
+    left: 108px;
     display: flex;
     flex-direction: column;
   }
@@ -675,8 +694,19 @@
     line-height: 9.07px;
   }
 
+  /*
+   * The amount's band: the height it had, and the sheet's spare height on top of that, so the
+   * figure has the room a 52 dp number needs and never sits against the token above it. It is
+   * capped, because the space it does not need belongs to the keys.
+   */
   .amount {
-    margin-top: 66.9px;
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 132px;
+    max-height: 208px;
+    margin-top: 0;
     font-size: 52px;
     line-height: 60.8px;
     text-align: center;
@@ -744,10 +774,19 @@
     color: var(--m-text);
   }
 
+  /*
+   * The keys are what flexes. Fixed at 240 dp the sheet needed 681 dp before the control, which
+   * does not fit a small phone at all — and on a tall one it left the space to the amount, which
+   * fills a 188 dp band with one number. Bounded at both ends, it gives on the one and takes on
+   * the other, and the keys themselves carry the difference rather than an empty band.
+   */
   .keypad {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    height: 240px;
+    flex: 1 1 auto;
+    min-height: 176px;
+    max-height: 320px;
+    height: auto;
     margin-top: 24px;
   }
 
@@ -874,8 +913,14 @@
   }
 
   .foot {
-    margin-top: auto;
-    padding: 0 16px 11.7px;
+    /* no spare height to claim any more — the keys and the amount have it */
+    margin-top: 12px;
+    /*
+     * The control clears the home indicator and the browser's own bottom bar. On an old iOS the
+     * bar sits over the bottom of the page, and a control flush with the edge is a control the
+     * reader cannot reach: this is the inset that puts it above that bar.
+     */
+    padding: 0 16px calc(11.7px + env(safe-area-inset-bottom));
   }
 
   .meta {
@@ -994,5 +1039,67 @@
     margin: 8px 0 0;
     font-size: 14px;
     color: var(--m-red);
+  }
+
+  /* Breakpoints last: a media query has no more weight than the rule it means to
+     override, so it has to come after it. */
+  /*
+   * Small phones: the sheet's own budgets, cut. A 568 dp screen has no room for a 132 dp amount
+   * band and 176 dp of keys at once, so on anything under 700 dp the amount keeps a band a little
+   * over one line and the keys take what is left.
+   */
+  @media (max-height: 700px) {
+    .amount {
+      min-height: 104px;
+    }
+
+    .keypad {
+      min-height: 152px;
+      margin-top: 16px;
+    }
+
+    .percents {
+      margin-top: 8px;
+    }
+
+    .order {
+      margin-top: 10px;
+    }
+  }
+
+  /*
+   * The smallest phones still sold as phones: 568 dp tall. Everything here gives a little — the
+   * mark's row, the amount's band and its figure, the keys — so that the control, which is the
+   * point of the sheet, is on the screen rather than below it.
+   */
+  @media (max-height: 620px) {
+    .token {
+      height: 60px;
+    }
+
+    .amount {
+      min-height: 92px;
+      font-size: 42px;
+      line-height: 50px;
+    }
+
+    .keypad {
+      min-height: 128px;
+      margin-top: 12px;
+    }
+
+    .order,
+    .percents {
+      margin-top: 6px;
+    }
+
+    .foot {
+      margin-top: 8px;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    }
+
+    .control {
+      margin-top: 8px;
+    }
   }
 </style>

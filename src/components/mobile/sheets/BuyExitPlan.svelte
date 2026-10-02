@@ -61,72 +61,144 @@
     onclick={() => (plan.open = !plan.open)}
   >
     <span class="title">Exit plan</span>
-    <span class="value" class:value--set={!!summary}>{summary || "Set exit plan"}</span>
-    <span class="chevron" class:chevron--up={plan.open}><Chevron style="width: 16px; height: 16px" /></span>
+    <span class="right">
+      <span class="value" class:value--set={!!summary}>{summary || "Set"}</span>
+      <span class="chevron" class:chevron--up={plan.open}><Chevron style="width: 16px; height: 16px" /></span>
+    </span>
   </button>
-
-  {#if plan.open}
-    <div class="body">
-      {#each [{ kind: "takeProfit", label: "Take profit", sign: "+", placeholder: "50" }, { kind: "stopLoss", label: "Stop loss", sign: "−", placeholder: "20" }] as row (row.kind)}
-        <div class="row">
-          <div class="left">
-            <span class="label">{row.label}</span>
-            <button type="button" class="share" disabled={waiting} onclick={() => cycle(row.kind)}>
-              {word(row.kind)}
-            </button>
-          </div>
-          <span class="box">
-            <span class="sign">{row.sign}</span>
-            <input
-              class="pct m-num"
-              type="number"
-              inputmode="decimal"
-              min="0.1"
-              max="10000"
-              step="0.1"
-              placeholder={row.placeholder}
-              aria-label={`${row.label} percent`}
-              disabled={waiting}
-              value={plan[row.kind].pct}
-              oninput={(event) => (plan[row.kind].pct = event.currentTarget.value)}
-              onchange={(event) => type(row.kind, event.currentTarget.value)}
-            />
-            <span class="sign">%</span>
-          </span>
-        </div>
-      {/each}
-    </div>
-  {/if}
 </div>
+
+<!--
+  The rows live in a popup rather than under the row that opens them: a panel that grows inside the
+  sheet pushes the amount and the keypad down the moment it is tapped, which moves the thing the
+  reader was about to use and takes the sheet's own height with it. Laid over the sheet it costs
+  nothing and closes the way a phone's panels do — on Done, or on the scrim.
+-->
+{#if plan.open}
+  <div class="scrim" role="presentation" onclick={() => (plan.open = false)}></div>
+  <div class="popup" role="dialog" aria-modal="true" aria-label="Exit plan">
+    <div class="popup-head">
+      <span class="popup-title">Exit plan</span>
+      <button type="button" class="done" onclick={() => (plan.open = false)}>Done</button>
+    </div>
+    {#each [{ kind: "takeProfit", label: "Take profit", sign: "+", placeholder: "50" }, { kind: "stopLoss", label: "Stop loss", sign: "−", placeholder: "20" }] as row (row.kind)}
+      <div class="row">
+        <div class="left">
+          <span class="label">{row.label}</span>
+          <button type="button" class="share" disabled={waiting} onclick={() => cycle(row.kind)}>
+            {word(row.kind)}
+          </button>
+        </div>
+        <span class="box">
+          <span class="sign">{row.sign}</span>
+          <input
+            class="pct m-num"
+            type="number"
+            inputmode="decimal"
+            min="0.1"
+            max="10000"
+            step="0.1"
+            placeholder={row.placeholder}
+            aria-label={`${row.label} percent`}
+            disabled={waiting}
+            value={plan[row.kind].pct}
+            oninput={(event) => (plan[row.kind].pct = event.currentTarget.value)}
+            onchange={(event) => type(row.kind, event.currentTarget.value)}
+          />
+          <span class="sign">%</span>
+        </span>
+      </div>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .plan {
     margin: 0 16px;
   }
 
+  /*
+   * The row is the footer's own meta line — "Exit plan" where "$7.98 available" sits, its value
+   * and chevron where the fee chevron sits. One line, the sheet's own type, no padding of its own:
+   * a whole 12 dp band above and below it was the last of the dead space in this sheet.
+   */
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
-    padding: 12px 0;
+    height: 18.67px;
+    padding: 0;
     background: none;
     border: 0;
     cursor: pointer;
   }
 
+  .right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(6, 6, 12, 0.55);
+  }
+
+  /* Laid over the sheet, above the safe area, and closing on Done or on the scrim. */
+  .popup {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 41;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+    background: var(--m-card);
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  .popup-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .popup-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--m-text);
+  }
+
+  .done {
+    padding: 0;
+    background: none;
+    border: 0;
+    font-size: 16px;
+    font-weight: 700;
+    /* neutral: this panel is the same one on a buy and on a sell */
+    color: var(--m-text);
+    cursor: pointer;
+  }
+
   .title {
     flex: 0 0 auto;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     color: var(--m-muted);
   }
 
   .value {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     overflow: hidden;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     text-align: right;
     text-overflow: ellipsis;
@@ -150,13 +222,6 @@
     transform: rotate(180deg);
   }
 
-  .body {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding-bottom: 12px;
-  }
-
   .row {
     display: flex;
     align-items: center;
@@ -172,7 +237,7 @@
   }
 
   .label {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
     color: var(--m-muted);
   }
@@ -182,7 +247,7 @@
     padding: 0;
     background: none;
     border: 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--m-text);
     cursor: pointer;
@@ -203,11 +268,11 @@
   }
 
   .pct {
-    width: 44px;
+    width: 56px;
     background: none;
     border: 0;
     outline: none;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
     text-align: right;
     color: var(--m-text);
