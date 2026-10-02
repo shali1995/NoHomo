@@ -624,7 +624,22 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
             const reserveLayout = layoutReadout(ctx, cfg.palette, reserve, { maxWidth });
             const slots = readoutSlotsRef.current;
             const hoverLayout = hover ? layoutReadout(ctx, cfg.palette, hover, { maxWidth, minWidths: slots }) : null;
-            readoutRowsRef.current = Math.max(1, reserveLayout.rows, hoverLayout?.rows ?? 0);
+            /**
+             * Local patch: the band only ever grows.
+             *
+             * This count becomes the plot's top padding, and the reserve is the *live* values —
+             * so measured afresh, it moves with them: one row while the price is short, two when
+             * the text wraps, and back again on the next tick. Eighteen pixels of plot moving up
+             * and down under the reader, on a phone whose font measures differently from the
+             * desktop's, is the axis bouncing. The rows are therefore a high-water mark, exactly
+             * as the slot widths below already are: it may step once, and then it stays.
+             */
+            readoutRowsRef.current = Math.max(
+                readoutRowsRef.current,
+                1,
+                reserveLayout.rows,
+                hoverLayout?.rows ?? 0
+            );
             if (!hoverLayout) {
                 slots.length = 0;
                 return;
@@ -990,8 +1005,25 @@ export function mountLivelineEngine(canvasElement, container, initialConfig) {
             // the morph — the line gets slightly more Y margin in line mode
             // (room for wicks it doesn't use) but that's an acceptable trade-off.
             const chartW = w - pad.left - pad.right;
-            const computed = effectiveVisible.length > 0
-                ? computeCandleRange(effectiveVisible)
+            /**
+             * Local patch: the range measures the candles as they **are**, not as they are drawn.
+             *
+             * `effectiveVisible` carries `smoothLive`, and the library resets that candle to a
+             * single point — high = low = open — the moment a new candle begins, then lerps the
+             * wicks back in. Measuring it means the axis loses the candle's extreme for that
+             * moment and finds it again a few frames later: a rescale on every candle, which is
+             * the axis bouncing.
+             *
+             * So the scale is taken from the candles that exist, with the live one's real high and
+             * low. The animated candle is still what gets drawn — nothing about the animation
+             * changes, only what the axis is allowed to see.
+             */
+            const rangeCandles = sliceTimeRange(effectiveCandles, leftEdge - candleWidthSecs, rightEdge);
+            if (rawLive && rawLive.time + candleWidthSecs >= leftEdge && rawLive.time <= rightEdge) {
+                rangeCandles.push(rawLive);
+            }
+            const computed = rangeCandles.length > 0
+                ? computeCandleRange(rangeCandles)
                 : { min: displayMinRef.current, max: displayMaxRef.current };
             const rangeResult = updateCandleRange(computed, transition, {
                 rangeInited: rangeInitedRef.current,

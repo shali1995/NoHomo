@@ -149,13 +149,26 @@
     return { time: start, open: price, high: price, low: price, close: price };
   });
 
-  /** The series' own newest candle is the forming one only while it is still the live bucket. */
-  const forming = $derived(
-    series.length > 0 && bucketStart(Date.now() / 1000) === bucketStart(series[series.length - 1].time)
-  );
-  const committed = $derived(forming ? series.slice(0, -1) : series);
   /** Nothing is still forming in the past, so a panned chart passes no live candle. */
   const live = $derived(away ? undefined : liveCandle);
+
+  /**
+   * Everything before the forming candle — and which candle that is, is decided by the forming
+   * candle's own timestamp rather than by a second reading of the clock.
+   *
+   * `Date.now()` is not reactive: it is read when a derivation runs and not again until something
+   * else makes it run. So `liveCandle` and a separate `forming` check could disagree — a price
+   * update moves the live candle to a new bucket while the older `forming` answer stands, leaving
+   * the newest series candle neither in `committed` nor in the live candle. Its high and low
+   * disappeared from the chart's own candle list until the next candle arrived and put them back,
+   * which is a rescale of the axis in the meantime. One derivation, one answer: the newest candle
+   * is the forming one exactly when the live candle is that same candle.
+   */
+  const committed = $derived.by(() => {
+    const newest = series[series.length - 1];
+    if (!newest) return series;
+    return live && newest.time === live.time ? series.slice(0, -1) : series;
+  });
   /** The figures the tip follows: the market's price, not the last candle's close. */
   const newestPrice = $derived(liveMark > 0 ? liveMark : last);
 
