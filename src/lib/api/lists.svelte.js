@@ -29,7 +29,14 @@ const SOURCES = {
 /** `/v2/token/multi` resolves at most 20 tokens per request (it 400s above 25). */
 const CHUNK = 20;
 
-/** How long OpenDEX's answer is trusted before its tokens are asked for again. */
+/**
+ * How long OpenDEX's answer is trusted before its tokens are asked for again.
+ *
+ * Landing on one of these lists asks straight away (`startListLive` below), so this is only the
+ * backstop for a list that is left open: a minute, which is what a curated list of majors and
+ * equities is worth. Trending, Bonding and Echo are pushed instead — a socket frame or a stream
+ * snapshot every second or two — and those keep their own cadence.
+ */
 const STALE_MS = 60 * 1000;
 
 /** How many of an asset's variants are worth asking about when its first pick is unknown. */
@@ -178,6 +185,10 @@ async function askMints(mints) {
       const address = token?.tokenAddress;
       if (typeof address !== "string") continue;
       byMint.set(address, {
+        // `rowPrice` reads this field. Without it the row fell back to the snapshot in the
+        // payload — the file's own price, written when the file was — which is why Crypto and
+        // Stocks held one number while Trending moved.
+        price: Number(token?.quote?.priceUsd ?? token?.quote?.priceUsdStr ?? 0),
         mcap: Number(token?.quote?.marketCapUsd ?? 0),
         change: Number(token?.stats?.timeframes?.["24h"]?.priceChangePct ?? 0),
         at: Date.now()
