@@ -226,7 +226,7 @@
     gap: 10px;
     flex: 0 0 auto;
     height: 64px;
-    padding: calc(24px + env(safe-area-inset-top)) 16px 0 16px;
+    padding: calc(6px + env(safe-area-inset-top)) 16px 0 16px;
   }
 
   /* NOHOMO, at the height the mark beside it reads against (the svg is 118x24). */

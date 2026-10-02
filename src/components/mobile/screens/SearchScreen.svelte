@@ -329,7 +329,7 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    padding-top: calc(24px + env(safe-area-inset-top));
+    padding-top: calc(6px + env(safe-area-inset-top));
   }
 
   /* The capture's strip: 12 dp above the chips, 4 below, chips 25.1 tall on a 6 radius. */

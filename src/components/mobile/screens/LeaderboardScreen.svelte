@@ -155,11 +155,11 @@
           onclick={() => (page = item.id)}
         >
           {item.label}{#if item.id === "friends" && friends.length} ({friends.length}){/if}
+          <!-- the rule is the label's own child, so it is under it wherever the label sits -->
+          {#if page === item.id}<span class="rule"></span>{/if}
         </button>
       </span>
     {/each}
-    <!-- 110.4 wide at 259.7 under the live label: the capture's own box, moved with the tab. -->
-    <span class="indicator" style="left: {page === "friends" ? 109.9 : 259.7}px"></span>
   </nav>
 
   <div class="body m-scroll">
@@ -347,8 +347,9 @@
     position: relative;
     display: flex;
     flex: 0 0 auto;
-    height: 69.3px;
-    padding-top: 24px;
+    height: 51.3px;
+    /* the status bar's inset and nothing more: the tabs are the top of this page */
+    padding-top: calc(6px + env(safe-area-inset-top));
     border-bottom: 1px solid var(--m-hairline);
   }
 
@@ -364,6 +365,8 @@
   }
 
   .page {
+    /* the rule below is this label's own child */
+    position: relative;
     font-size: 16px;
     font-weight: 500;
     line-height: 20.3px;
@@ -374,11 +377,14 @@
     color: var(--m-text);
   }
 
-  .indicator {
+  /* The feed's own rule: 110.4 dp of accent, centred under whatever label it belongs to. */
+  .rule {
     position: absolute;
-    bottom: 0;
+    left: 50%;
+    top: calc(100% + 8.8px);
     width: 110.4px;
     height: 3.2px;
+    transform: translateX(-50%);
     border-radius: 2px;
     background: var(--m-blue);
   }

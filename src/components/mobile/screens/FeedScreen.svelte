@@ -220,7 +220,7 @@
   .head {
     flex: 0 0 auto;
     height: 45.3px;
-    margin-top: calc(24px + env(safe-area-inset-top));
+    margin-top: calc(6px + env(safe-area-inset-top));
     background: var(--m-bg);
     border-bottom: 1px solid var(--m-hairline);
   }
