@@ -185,8 +185,12 @@
     margin-top: 12.2px;
   }
 
+  /*
+   * The frame strip's chips end and the tabs begin: the capture leaves 24 dp here, which reads as
+   * a hole between two rows that belong together. 8 keeps them one block.
+   */
   .tabs-block {
-    margin-top: 24px;
+    margin-top: 4px;
   }
 
   .body {
