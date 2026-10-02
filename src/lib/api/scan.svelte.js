@@ -16,6 +16,7 @@
  * (it compares `pairAddress` and keeps a carried-over `sparkline`). `scanRows()` maps them
  * for the list, so a frame that changes one number still re-renders the row.
  */
+import { untrack } from "svelte";
 import { api } from "./client.js";
 import { discoveryRowFromToken, mergeScannerFrame } from "./trending.svelte.js";
 import { createCoalescer } from "../utils/coalesce.js";
@@ -68,7 +69,7 @@ export function isScanLoading() {
 
 export function selectScanView(id) {
   if (!SCAN_VIEWS.some((entry) => entry.id === id)) return;
-  view = id;
+  if (view !== id) view = id;
   const stored = cache.get(id);
   if (stored) {
     tokens = stored;
@@ -76,17 +77,27 @@ export function selectScanView(id) {
     openSubscription();
     return;
   }
-  tokens = [];
+  // Written only when it differs: a fresh `[]` is a new reference every time, and a caller
+  // that reads this state (an effect) would then re-run on its own write.
+  if (tokens.length > 0) tokens = [];
+  if (cursor !== null) cursor = null;
   loading = true;
-  cursor = null;
   void seed();
 }
 
 /** Opens on the ranking the screen was last left on. */
+/**
+ * `untrack`: the caller is an effect, and an effect that both reads this state and calls
+ * something that writes it re-runs on its own write — which is the update-depth error this
+ * avoids. Nothing is lost: opening the list is a mount-time action, not a reactive one, and
+ * every change afterwards comes in over the socket.
+ */
 export function startScan() {
   if (started) return;
   started = true;
-  if (tokens.length === 0) selectScanView(view);
+  untrack(() => {
+    if (tokens.length === 0) selectScanView(view);
+  });
 }
 
 export function stopScan() {
