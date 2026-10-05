@@ -136,16 +136,14 @@
             <h2 class="text-base font-bold text-text-primary leading-tight text-center">Now, seriously.</h2>
 
             <p class="text-sm text-text-primary leading-relaxed">
-              FOMO pretends to be Apple. It pays KOLs to shill — people I personally can't stand. It
-              takes fees, and it extracts.
+              FOMO pays KOLs to shill. It takes fees, and it extracts.
             </p>
             <p class="text-sm text-text-primary leading-relaxed">
-              Everyone on Twitter cries that it's shit, every single day, and nobody does anything
-              about it. So we built the thing instead of crying.
+              Twitter cries about it every day. So we built the thing instead.
             </p>
 
             <div class="flex flex-col gap-1">
-              {#each ["Open source — fork it, modify it, build on top of it.", "Ask for a feature and it gets built, fast.", "Platform fees go back to the users. No extraction.", "And we hire trolls to bury the FOMO app."] as line (line)}
+              {#each ["Open source — fork it, build on it.", "Ask for a feature, it ships.", "Fees go back to users.", "And we hire trolls to bury FOMO."] as line (line)}
                 <span class="text-sm text-text-primary leading-relaxed">— {line}</span>
               {/each}
             </div>
@@ -179,14 +177,33 @@
 
 <style>
   /* Scoped: the video and the copy side by side, and the stack they fall back to. */
+  /*
+   * One height for both steps. Step 2 is the longer of the two (354 dp, its own content), so the
+   * body reserves that and step 1 sits in the same box — the panel is centred, and a taller step
+   * moves everything in it, mark included. Below the two-column breakpoint the steps stack and
+   * there is no height to hold.
+   */
   .welcome-body {
     display: flex;
     gap: 14px;
     align-items: stretch;
   }
+
+  @media (min-width: 621px) {
+    .welcome-body {
+      min-height: 354px;
+    }
+  }
+  /*
+   * The video fills the body's height, and the body is one height for both steps — so it is the
+   * same size on both, and as tall as the panel allows rather than as tall as its own 9:16 box.
+   * Pinning it to that box shrank it against step 2's taller column; stretching it is only safe
+   * because the height underneath no longer changes. `contain`, so nothing is cropped out.
+   */
   .welcome-video {
     flex: 0 0 auto;
     width: 170px;
+    height: 100%;
     object-fit: contain;
   }
   @media (max-width: 620px) {
