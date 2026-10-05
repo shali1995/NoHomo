@@ -109,10 +109,14 @@
 </div>
 
 <style>
+  /*
+   * Above the sheets that ask for it: a trade sheet is z 40, so a chooser at 40 opened from one
+   * landed behind it — the reader saw nothing, went back, and found it on the chart underneath.
+   */
   .overlay {
     position: absolute;
     inset: 0;
-    z-index: 40;
+    z-index: 60;
     display: flex;
     align-items: flex-end;
   }
