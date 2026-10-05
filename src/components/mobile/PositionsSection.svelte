@@ -81,7 +81,10 @@
       </span>
       <span class="figs">
         <span class="usd m-num">{usdText(position)}</span>
-        <span class="pct m-num" style="color: {ink(position)}">{pctText(position)}</span>
+        <span class="pct m-num" style="color: {ink(position)}">
+          <span class="arrow" aria-hidden="true">{netUsd(position) >= 0 ? "\u25B2" : "\u25BC"}</span>
+          {pctText(position)}
+        </span>
       </span>
     </button>
   {/snippet}
@@ -122,7 +125,10 @@
         </span>
         <span class="figs">
           <span class="usd m-num">{row.pnlText}</span>
-          <span class="pct m-num">{row.pnlPct}</span>
+          <span class="pct m-num" style="color: {row.pnlUp ? "#21c95e" : "#ff622e"}">
+            <span class="arrow" aria-hidden="true">{row.pnlUp ? "\u25B2" : "\u25BC"}</span>
+            {row.pnlPct}
+          </span>
         </span>
       </button>
     {/each}
@@ -288,8 +294,17 @@
     color: var(--m-text);
   }
 
+  /* The arrow the desktop's rows carry: a 6 dp glyph on the percent's own line. */
   .pct {
+    display: flex;
+    align-items: center;
+    gap: 3px;
     font-size: 12px;
+  }
+
+  .arrow {
+    font-size: 6px;
+    line-height: 1;
   }
 
   .dust {
