@@ -483,7 +483,14 @@
     onLayout={(next) => (layoutRef = next)}
   />
 
-  <LiveLevels {address} {levels} {gesture} toprice={asPrice} layout={() => layoutRef} />
+  <LiveLevels
+    {address}
+    {levels}
+    {gesture}
+    toprice={asPrice}
+    format={formatAmount}
+    layout={() => layoutRef}
+  />
 </div>
 
 <style>

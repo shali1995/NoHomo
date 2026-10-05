@@ -40,6 +40,8 @@
   let {
     address = "",
     levels = [],
+    /** How a level's value is printed: the chart's own rule, so a cap reads `$4.32M`. */
+    format = formatPrice,
     layout = () => null,
     gesture = { hit: null, blocked: false },
     /** A value on the chart's own axis back as a price, which is what a move call is written in. */
@@ -306,7 +308,7 @@
           </span>
         {/if}
         <span class="tag">{level.label}</span>
-        <span class="price m-num">{formatPrice(valueOf(level))}</span>
+        <span class="price m-num">{format(valueOf(level))}</span>
       </span>
     </div>
   {/each}
@@ -314,7 +316,7 @@
   {#if readout}
     <div class="readout" style="top: {readout.y}px; --tone: {readout.colour}">
       <span class="readout-name">{readout.level.label}</span>
-      <span class="readout-price m-num">{formatPrice(readout.price)}</span>
+      <span class="readout-price m-num">{format(readout.price)}</span>
       <span class="readout-delta m-num">{readout.delta}</span>
     </div>
   {/if}
