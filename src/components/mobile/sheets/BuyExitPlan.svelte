@@ -114,7 +114,8 @@
 
 <style>
   .plan {
-    margin: 0 16px;
+    /* its own air above the keys, which end flush on this row otherwise */
+    margin: 6px 16px 0;
   }
 
   /*
@@ -122,13 +123,18 @@
    * and chevron where the fee chevron sits. One line, the sheet's own type, no padding of its own:
    * a whole 12 dp band above and below it was the last of the dead space in this sheet.
    */
+  /*
+   * 36 dp, not the footer's 18.67: this row lives in the sheet's body, where its own line is 24 dp
+   * tall — at 18.67 the text overflowed its row and ran into the keys above it. 36 is a tap target
+   * with the line centred in it.
+   */
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
-    height: 18.67px;
+    height: 36px;
     padding: 0;
     background: none;
     border: 0;
