@@ -49,6 +49,24 @@
   box-sizing: border-box;
 }
 
+/*
+ * No double-tap zoom on anything you press.
+ *
+ * `manipulation` keeps scrolling and pinching but drops the double-tap-to-zoom gesture, which on a
+ * phone is what a second tap on the backspace looks like: the keypad would zoom the sheet instead
+ * of deleting a digit. Pinch-zoom itself cannot be switched off in iOS Safari — it has ignored
+ * `user-scalable=no` since iOS 10, and only a page added to the Home Screen can refuse it — so this
+ * is the half that can be fixed, and it is the half being hit.
+ */
+.m-phone button,
+.m-phone input,
+.m-phone textarea,
+.m-phone select,
+.m-phone [role="button"],
+.m-phone [role="tab"] {
+  touch-action: manipulation;
+}
+
 .m-phone button {
   font: inherit;
   color: inherit;

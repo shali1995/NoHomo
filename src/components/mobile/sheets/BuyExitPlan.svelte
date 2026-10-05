@@ -272,7 +272,7 @@
     background: none;
     border: 0;
     outline: none;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 500;
     text-align: right;
     color: var(--m-text);

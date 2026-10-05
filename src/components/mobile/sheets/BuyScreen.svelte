@@ -956,7 +956,7 @@
     background: none;
     border: 0;
     outline: none;
-    font-size: 15px;
+    font-size: 16px;
     color: var(--m-text);
     text-align: right;
     -moz-appearance: textfield;
