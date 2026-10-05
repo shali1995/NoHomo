@@ -8,6 +8,7 @@
   import OrderIsland from "./OrderIsland.svelte";
   import ToastContainer from "../ToastContainer.svelte";
   import Portal from "../Portal.svelte";
+  import ConnectSheet from "./sheets/ConnectSheet.svelte";
   import HomeScreen from "./screens/HomeScreen.svelte";
   import SearchScreen from "./screens/SearchScreen.svelte";
   import FeedScreen from "./screens/FeedScreen.svelte";
@@ -28,7 +29,7 @@
     openMobileTrade
   } from "../../lib/mobile-sheets.svelte.js";
   import { accountWallets } from "../../lib/api/account.svelte.js";
-  import { getAuthWallet } from "../../lib/auth.svelte.js";
+  import { getAuthWallet, getConnectRequests } from "../../lib/auth.svelte.js";
 
   /** Same props the desktop pages get, from App.svelte's route match. */
   let { page, chain, address, wallet } = $props();
@@ -57,6 +58,21 @@
   function back() {
     navigate("/");
   }
+
+  /**
+   * The connect sheet, opened by count: a buy or a sell with no session raises the request (the
+   * auth store counts them) and this answers it, exactly as the desktop top bar does. Without an
+   * owner on this side the phone's ask went nowhere.
+   */
+  let connectOpen = $state(false);
+  let seenRequests = 0;
+  $effect(() => {
+    const asked = getConnectRequests();
+    if (asked > seenRequests) {
+      seenRequests = asked;
+      connectOpen = true;
+    }
+  });
 </script>
 
 <div class="m-phone">
@@ -98,6 +114,10 @@
     <div class="pushed">
       <ProfileScreen wallet={wallet} pushed onback={back} onopen={openRow} />
     </div>
+  {/if}
+
+  {#if connectOpen}
+    <ConnectSheet onclose={() => (connectOpen = false)} />
   {/if}
 
   {#if isMobileDepositOpen()}

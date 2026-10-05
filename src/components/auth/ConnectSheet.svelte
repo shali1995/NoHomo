@@ -10,6 +10,7 @@
   //     the pairing can only be started once there *is* a session (the endpoint wants the
   //     desktop's own token). Ported from Ombra's `MobileConnectModal`.
   import Close from "../../icons/close.svelte";
+  import Google from "../../icons/google.svelte";
   import WalletDeposit from "../../icons/wallet-deposit.svelte";
   import Smartphone from "../../icons/smartphone.svelte";
   import RotateCcw from "../../icons/rotate-ccw.svelte";
@@ -23,6 +24,8 @@
     getIsLoggedIn,
     isPhantomInstalled
   } from "../../lib/auth.svelte.js";
+  import { connectWithWallet, installedWallets, walletIcon, walletName } from "../../lib/wallets.svelte.js";
+  import { startGoogleLogin } from "../../lib/auth/google.js";
 
   /** @type {{ onclose: () => void, view?: "choose" | "qr" }} */
   let { onclose, view = "choose" } = $props();
@@ -144,6 +147,22 @@
     if (pairing === "idle" || pairing === "error" || pairing === "expired") startPairing();
   }
 
+  /** Any wallet the browser has: the challenge and the JWT are the same whoever signs them. */
+  async function signInWithWallet(wallet) {
+    localError = "";
+    try {
+      await connectWithWallet(wallet);
+      close();
+    } catch (e) {
+      localError = getAuthError() ?? (e instanceof Error ? e.message : "Connection failed");
+    }
+  }
+
+  /** Google: nothing to connect, the backend runs it and this page goes along for the ride. */
+  function signInWithGoogle() {
+    if (!startGoogleLogin()) localError = "Google sign-in is not configured for this build";
+  }
+
   async function signIn() {
     if (installing) {
       window.open("https://phantom.app/", "_blank");
@@ -199,35 +218,79 @@
 
     {#if step === "choose"}
       <div class="flex flex-col gap-2">
+        <!--
+          What the browser has. Wallet Standard answers this, so the list is whatever is installed
+          rather than the names this file happens to know, and each row wears the wallet's own icon.
+        -->
+        {#each installedWallets() as wallet (wallet.name)}
+          <button
+            type="button"
+            class="flex items-center gap-3 w-full rounded-xl border border-bg-tertiary bg-bg-secondary px-3 py-3 text-left hover:bg-bg-tertiary disabled:opacity-60"
+            onclick={() => signInWithWallet(wallet)}
+            disabled={getIsConnecting()}
+          >
+            {#if walletIcon(wallet)}
+              <img src={walletIcon(wallet)} alt="" class="w-6 h-6 rounded-md" />
+            {:else}
+              <WalletDeposit />
+            {/if}
+            <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+              <div class="text-sm font-medium">
+                {getIsConnecting() ? "Waiting for your wallet…" : walletName(wallet)}
+              </div>
+              <div class="text-xs text-text-tertiary">Sign a message to sign in</div>
+            </div>
+          </button>
+        {/each}
+
         <button
           type="button"
           class="flex items-center gap-3 w-full rounded-xl border border-bg-tertiary bg-bg-secondary px-3 py-3 text-left hover:bg-bg-tertiary disabled:opacity-60"
-          onclick={signIn}
+          onclick={signInWithGoogle}
           disabled={getIsConnecting()}
         >
-          <WalletDeposit />
+          <Google class="w-6 h-6" />
           <div class="flex flex-col gap-0.5 min-w-0 flex-1">
-            <div class="text-sm font-medium">
-              {#if getIsConnecting()}
-                Waiting for Phantom…
-              {:else if installing}
-                Install Phantom
-              {:else}
-                Connect Wallet
-              {/if}
-            </div>
-            <div class="text-xs text-text-tertiary">
-              {#if installing}
-                Phantom isn't installed in this browser
-              {:else}
-                Sign a message with Phantom to sign in
-              {/if}
-            </div>
+            <div class="text-sm font-medium">Google</div>
+            <div class="text-xs text-text-tertiary">Sign in with your Google account</div>
           </div>
-          {#if installing}
-            <div class="text-accent-primary text-xs font-bold">Get it</div>
-          {/if}
         </button>
+
+        <!--
+          Only when there is nothing to connect: a wallet the reader does not have is not a door,
+          it is an install, and a list of five of them would bury the two rows that work.
+        -->
+        {#if installedWallets().length === 0}
+          <button
+            type="button"
+            class="flex items-center gap-3 w-full rounded-xl border border-bg-tertiary bg-bg-secondary px-3 py-3 text-left hover:bg-bg-tertiary disabled:opacity-60"
+            onclick={signIn}
+            disabled={getIsConnecting()}
+          >
+            <WalletDeposit />
+            <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+              <div class="text-sm font-medium">
+                {#if getIsConnecting()}
+                  Waiting for Phantom…
+                {:else if installing}
+                  Install Phantom
+                {:else}
+                  Connect Wallet
+                {/if}
+              </div>
+              <div class="text-xs text-text-tertiary">
+                {#if installing}
+                  Phantom isn't installed in this browser
+                {:else}
+                  Sign a message with Phantom to sign in
+                {/if}
+              </div>
+            </div>
+            {#if installing}
+              <div class="text-accent-primary text-xs font-bold">Get it</div>
+            {/if}
+          </button>
+        {/if}
 
         <button
           type="button"

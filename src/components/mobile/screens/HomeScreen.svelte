@@ -24,6 +24,7 @@
     stopScan
   } from "../../../lib/api/scan.svelte.js";
   import { getWindowLabel, railTraders } from "../../../lib/api/leaderboard.svelte.js";
+  import { getIsLoggedIn, requestConnect } from "../../../lib/auth.svelte.js";
   import {
     BONDING_PHASE,
     GRADUATED_PHASE,
@@ -76,6 +77,8 @@
     if (SCAN_IDS.includes(id)) selectScanView(id);
   }
   const funded = $derived(accountLoaded());
+  /** Signed out, the header's button is the way in rather than the way to fund an account. */
+  const signedIn = $derived(getIsLoggedIn());
 
   /** "$8.28" is set as two tones of one number: the dollars plain, the cents dimmed. */
   const total = $derived.by(() => {
@@ -168,7 +171,17 @@
         </div>
       </div>
 
-      <button type="button" class="deposit" onclick={openMobileDeposit}>Deposit</button>
+      <!--
+        One button, two jobs, because a signed-out reader has nothing to deposit into: it opens the
+        sign-in doors when there is no session, and the deposit sheet when there is.
+      -->
+      <button
+        type="button"
+        class="deposit"
+        onclick={signedIn ? openMobileDeposit : requestConnect}
+      >
+        {signedIn ? "Deposit" : "Login"}
+      </button>
     </div>
 
     <TraderRail

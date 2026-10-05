@@ -21,6 +21,7 @@
   import { matchRoute, startRouter } from "./lib/router.js";
   import { startFitScale } from "./lib/utils/fit.js";
   import { initAuth, onAuthTokenChange } from "./lib/auth.svelte.js";
+  import GoogleCallback from "./components/auth/GoogleCallback.svelte";
   import ToastContainer from "./components/ToastContainer.svelte";
   import Portal from "./components/Portal.svelte";
   import { authenticate } from "./lib/ws/client.js";
@@ -43,6 +44,12 @@
     matchRoute(url.pathname) ?? { name: "token", params: {} }
   );
   const page = $derived(resolved.name === "profile" ? "profile" : "token");
+  /**
+   * The Google return is not a screen of the app: it is a session arriving, and it belongs to
+   * neither shell. It is drawn instead of them for the moment it takes to read the query and hand
+   * the token to the auth store, whichever frame the reader came from.
+   */
+  const googleCallback = $derived(resolved.name === "google");
   const profileWallet = $derived(resolved.params.wallet ?? "");
   const chain = $derived(resolved.params.chain ?? "");
   const address = $derived(resolved.params.address ?? "");
@@ -100,7 +107,10 @@
   const tradeId = $derived(new URLSearchParams(url.search).get("tradeId"));
 </script>
 
-{#if isConnect}
+{#if googleCallback}
+  <!-- The session arriving from Google, before either shell exists for it. -->
+  <GoogleCallback />
+{:else if isConnect}
   <!-- The phone scans the desktop's QR here. It is outside the shell and outside the fitted
        box on purpose: it is a page for a phone, so it wants the window's own size and the
        window's own type. -->

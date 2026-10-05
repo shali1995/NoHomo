@@ -45,4 +45,6 @@ defineRoute("/profile/:wallet", ({ wallet }) => ({ name: "profile", params: { wa
 // The phone end of the mobile connect pairing. Registered before the wallet route, which
 // would otherwise read `connect` as a wallet address.
 defineRoute("/connect", () => ({ name: "connect", params: {} }));
+/** Where the auth backend sends the browser back to with the session in the query. */
+defineRoute("/auth/google/callback", () => ({ name: "google", params: {} }));
 defineRoute("/:wallet", ({ wallet }) => ({ name: "profile", params: { wallet } }));

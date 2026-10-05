@@ -265,6 +265,33 @@ export async function connectWallet() {
     const connected = await provider.connect();
     const address = connected.publicKey.toString();
 
+    await signInWith({
+      address,
+      /** Phantom's own shape: it answers `{ signature }`, already base58-ready bytes. */
+      signMessage: async (message) => (await provider.signMessage(message, "utf8")).signature
+    });
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Connection failed";
+    throw e;
+  } finally {
+    connecting = false;
+  }
+}
+
+/**
+ * The sign-in itself, once a wallet has an account and a way to sign.
+ *
+ * Split out of `connectWallet` because the door is no longer one wallet: anything that can give
+ * an address and sign a message signs in the same way — the challenge, the base58 signature, the
+ * JWT — whether it arrived through Phantom's injected provider or through Wallet Standard.
+ *
+ * @param {{ address: string, signMessage: (message: Uint8Array) => Promise<Uint8Array> }} wallet
+ */
+export async function signInWith({ address, signMessage }) {
+  connecting = true;
+  error = null;
+
+  try {
     const challengeResponse = await fetch(`${origin()}/v2/auth/challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -277,7 +304,7 @@ export async function connectWallet() {
     const challenge = await challengeResponse.json();
 
     const message = new TextEncoder().encode(challenge.message);
-    const signatureBytes = (await provider.signMessage(message, "utf8")).signature;
+    const signatureBytes = await signMessage(message);
     const bs58 = (await import("bs58")).default;
     const signature = bs58.encode(signatureBytes);
 

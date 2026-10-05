@@ -19,11 +19,7 @@
   import { tokenImage } from "../../../lib/api/config.js";
   import { formatUsdCompact } from "../../../lib/api/trending.svelte.js";
   import { accountCash, accountLoaded } from "../../../lib/api/account.svelte.js";
-  import {
-    connectWallet,
-    getIsLoggedIn,
-    isPhantomInstalled
-  } from "../../../lib/auth.svelte.js";
+  import { getIsLoggedIn, requestConnect } from "../../../lib/auth.svelte.js";
   import { navigate } from "../../../lib/router.js";
   import {
     buy,
@@ -301,16 +297,10 @@
   async function submit() {
     if (!signedIn) {
       /*
-       * A phone has two ways in, and which one applies is a fact about where the page is
-       * running, not a preference: inside a wallet's own browser the injected provider is
-       * there and the wallet signs for itself; in any other browser there is no provider to
-       * ask, so the phone pairs with a desktop instead — which is the page `/connect` is.
+       * The chooser owns the doors now — a wallet inside this browser, Google, or pairing with a
+       * desktop session — so the sheet asks for it rather than deciding here which one applies.
        */
-      if (isPhantomInstalled()) {
-        await connectWallet();
-        return;
-      }
-      navigate("/connect");
+      requestConnect();
       return;
     }
     if (!ready) return;
