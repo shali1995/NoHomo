@@ -71,10 +71,16 @@
    * way the desktop's own box is — empty means `AUTO`, and it says so with its placeholder. Two
    * controls for one value is what made the row read as "Auto 0.5% 1% 2% Auto%".
    */
+  /**
+   * The slippage ceiling's own values, the ones the settings panel offers: Auto, then four fixed
+   * ceilings. Auto is a chip like the rest rather than a state the empty box implies, so which one
+   * is chosen is visible at a glance.
+   */
   const SLIPPAGE = [
     { id: 0.5, label: "0.5%" },
     { id: 1, label: "1%" },
-    { id: 2, label: "2%" }
+    { id: 3, label: "3%" },
+    { id: 5, label: "5%" }
   ];
 
   const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "\u232B"];
@@ -150,6 +156,18 @@
   const slippageNow = $derived(selling ? settings.sellSlippagePct : settings.buySlippagePct);
   /** True when the store holds `AUTO`, which is a value a reader picked, not an empty box. */
   const slippageAuto = $derived(slippageNow === "AUTO");
+  /**
+   * What Auto actually resolves to for this token.
+   *
+   * The token snapshot carries it — `autoSlippage`, "suggested slippage for the token's main pair",
+   * 50 when the pair has no usable liquidity — so Auto is not a mystery setting: the box below the
+   * chips prints the number the route is using, and it follows the snapshot live.
+   */
+  const autoSlippage = $derived.by(() => {
+    const value = Number(getToken()?.autoSlippage);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  });
+
   /** True when it holds a number no chip stands for — a custom one. */
   const slippageCustom = $derived(
     !slippageAuto && !SLIPPAGE.some((option) => option.id === slippageNow)
@@ -164,7 +182,11 @@
    * stays in it.
    */
   $effect(() => {
-    slippage = slippageText(slippageNow);
+    slippage = slippageCustom
+      ? slippageText(slippageNow)
+      : slippageAuto && autoSlippage != null
+        ? autoSlippage.toFixed(1)
+        : "";
   });
 
   /**
@@ -241,16 +263,28 @@
     amount = next;
   }
 
+  /**
+   * The buy's quick amounts, in dollars.
+   *
+   * The desktop's row is `side === "buy" ? presets.buy : presets.sell` — dollars on a buy, percents
+   * on a sell — and the numbers are the reader's own, from the settings dialog. A buy chip that
+   * costs more than the cash on hand is offered greyed out rather than hidden, which is the
+   * desktop's own rule (`chip > cash`). The mobile's fourth chip stays Max, because on a phone
+   * "everything I have" is the one amount worth a button.
+   */
+  const buyPresets = $derived(tradePresets().buy.slice(0, 3).map(Number));
+
+  /** `share` is a dollar amount on a buy, a percent on a sell, or the word `max`. */
   function pickPreset(share) {
-    if (selling) {
-      amount = String(share);
-      return;
-    }
     if (share === "max") {
-      amount = cashKnown ? String(Math.floor(cash * 100) / 100) : "";
+      amount = selling
+        ? "100"
+        : cashKnown
+          ? String(Math.floor(cash * 100) / 100)
+          : "";
       return;
     }
-    amount = String(Math.floor(cash * (share / 100) * 100) / 100);
+    amount = selling ? String(share) : String(Number(share));
   }
 
   function toggleDetails() {
@@ -441,10 +475,21 @@
   {/if}
 
   <div class="percents">
-    {#each selling ? tradePresets().sell : [10, 25, 50] as share (share)}
-      <button type="button" class="percent" onclick={() => pickPreset(share)}>{share}%</button>
-    {/each}
-    {#if !selling}
+    {#if selling}
+      {#each tradePresets().sell as share (share)}
+        <button type="button" class="percent" onclick={() => pickPreset(share)}>{share}%</button>
+      {/each}
+    {:else}
+      {#each buyPresets as preset (preset)}
+        <button
+          type="button"
+          class="percent"
+          disabled={signedIn && cashKnown && preset > cash}
+          onclick={() => pickPreset(preset)}
+        >
+          ${preset.toLocaleString("en-US")}
+        </button>
+      {/each}
       <button type="button" class="percent" onclick={() => pickPreset("max")}>Max</button>
     {/if}
   </div>
@@ -569,12 +614,24 @@
         <div class="row row--stack">
           <span class="row-label">Slippage</span>
           <span class="row-chips">
+            <button
+              type="button"
+              class="small-chip"
+              class:small-chip--on={slippageAuto}
+              aria-pressed={slippageAuto}
+              onclick={() =>
+                setTradeSettings(
+                  selling ? { sellSlippagePct: "AUTO" } : { buySlippagePct: "AUTO" }
+                )}
+            >
+              Auto
+            </button>
             {#each SLIPPAGE as option (option.id)}
               <button
                 type="button"
                 class="small-chip"
-                class:small-chip--on={(selling ? settings.sellSlippagePct : settings.buySlippagePct) ===
-                  option.id}
+                class:small-chip--on={slippageNow === option.id}
+                aria-pressed={slippageNow === option.id}
                 onclick={() =>
                   setTradeSettings(
                     selling ? { sellSlippagePct: option.id } : { buySlippagePct: option.id }
@@ -583,30 +640,31 @@
                 {option.label}
               </button>
             {/each}
-            <!--
-              The custom value, where the desktop has its own box. It is the same control as the
-              chips beside it, in an editable shape: typing a number is what selects it, so no
-              chip is on while it holds one, and choosing Auto empties it — both from the store
-              rather than from a flag kept beside it, which is what stops the two disagreeing.
-            -->
-            <span
-              class="small-chip slip"
-              class:small-chip--on={slippageAuto || slippageCustom}
-              aria-label={slippageAuto ? "Slippage: auto" : "Custom slippage"}
+          </span>
+
+          <!--
+            The custom ceiling, on its own line under the chips and full width, the way the
+            settings panel draws it: the word on the left, the number and its sign on the right.
+            Typing in it is what selects it, so no chip is on while it holds a value, and it shows
+            a value only when that value is one no chip stands for — a chip's number belongs to the
+            chip, not to this box.
+          -->
+          <span class="slip-box" class:slip-box--on={slippageCustom}>
+            <span class="slip-word"
+              >{slippageAuto ? "Auto" : "Custom"}{slippageAuto && autoSlippage != null ? " ~" : ""}</span
             >
-              <input
-                class="slip-input m-num"
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="Auto"
-                aria-label="Custom slippage percent"
-                bind:value={slippage}
-                onchange={commitSlippage}
-                onkeydown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-              />
-              {#if slippage !== ""}<span class="slip-sign">%</span>{/if}
-            </span>
+            <input
+              class="slip-input m-num"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="Custom"
+              aria-label="Custom slippage percent"
+              bind:value={slippage}
+              onchange={commitSlippage}
+              onkeydown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+            />
+            {#if slippage !== ""}<span class="slip-sign">%</span>{/if}
           </span>
         </div>
         <div class="row">
@@ -820,10 +878,12 @@
   }
 
   /* Ours: the order type. The capture's form has one buy; this one can also wait for a dip. */
+  /* Label and chips as one centred group, so the row reads as its own control. */
   .order {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 10px;
     margin: 12px 24px 0;
   }
 
@@ -835,6 +895,12 @@
   .order-chips {
     display: flex;
     gap: 6px;
+  }
+
+  /* Even chips: four that each fit their own text read as a ragged edge. */
+  .order-chips .small-chip {
+    min-width: 62px;
+    text-align: center;
   }
 
   .small-chip {
@@ -852,55 +918,74 @@
   }
 
   /*
-   * The custom slippage: a chip with a box in it, sized for what it holds — three digits and a
-   * decimal at most ("100", "3.5"), or the word "Auto" when the store is on `AUTO`, which is what
-   * its placeholder says. The percent sign is drawn only beside a number: "Auto%" is not a value.
+   * The custom ceiling: the settings panel's own field, full width under the chips — the word on
+   * the left in the muted tone, what is typed on the right beside its sign.
    */
-  .slip {
-    display: inline-flex;
+  .slip-box {
+    display: flex;
     align-items: center;
-    padding: 5px 8px;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: var(--m-card-2);
   }
 
-  /* the box is the chip's own focus ring, so tapping it reads as tapping the chip */
-  .slip:focus-within {
-    border-color: var(--m-text);
+  .slip-box:focus-within {
+    border-color: var(--m-hairline);
+  }
+
+  /* a custom value is what this box stands for, so it says so the way a chosen chip does */
+  .slip-box--on {
+    background: var(--m-card);
+  }
+
+  /* Which of the two the line is showing: Auto's own number, or one being typed. */
+  .slip-word {
+    flex: 0 0 auto;
+    margin-right: 10px;
+    font-size: 15px;
+    color: var(--m-muted);
   }
 
   .slip-input {
-    width: 40px;
+    flex: 1 1 auto;
+    min-width: 0;
     padding: 0;
     background: none;
     border: 0;
     outline: none;
-    font-size: 14px;
-    font-weight: 700;
-    text-align: center;
+    font-size: 15px;
     color: var(--m-text);
+    text-align: right;
     -moz-appearance: textfield;
     appearance: textfield;
   }
 
+  /*
+   * The word sits on the left, the number on the right, and the two are told apart here: a
+   * placeholder can carry its own alignment, so the empty field reads "Custom" on the left and a
+   * typed value reads as a value, next to its sign.
+   */
   .slip-input::placeholder {
-    font-weight: 400;
+    color: var(--m-muted);
+    text-align: left;
+  }
+
+  .slip-input::-webkit-outer-spin-button,
+  .slip-input::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+  }
+
+  .slip-sign {
+    flex: 0 0 auto;
+    margin-left: 6px;
+    font-size: 15px;
     color: var(--m-muted);
   }
 
-  /*
-   * On `AUTO` the box is a selected chip that happens to be typeable: the word reads at the
-   * chip's own weight and colour, so "Auto is the setting" is visible rather than implied by an
-   * empty field. A preset's number is not selected here — the chip beside it is — so it stays
-   * quiet.
-   */
-  .slip.small-chip--on .slip-input::placeholder {
-    font-weight: 700;
-    color: var(--m-text);
-  }
-
-  /* the sign is part of the number a reader types, so it sits tight against it */
-  .slip-sign {
-    margin-left: -2px;
-  }
 
   .slip-input::-webkit-outer-spin-button,
   .slip-input::-webkit-inner-spin-button {
@@ -917,6 +1002,10 @@
     display: flex;
     gap: 11.73px;
     margin: 20px 24px 0;
+  }
+
+  .percent:disabled {
+    opacity: 0.4;
   }
 
   .percent {

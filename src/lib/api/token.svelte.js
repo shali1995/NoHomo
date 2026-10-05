@@ -426,6 +426,13 @@ function applyPriceUpdate(data) {
 function applyStatsUpdate(data) {
   if (!token) return;
   let next = { ...token };
+  /**
+   * The suggested slippage rides the `:stats` snapshot and moves with the market, so Auto's own
+   * number has to be taken from every frame. Without this line it is whatever the page loaded
+   * with, for as long as the page is open — the one field the reference merges here that we did
+   * not (`TokenDetail.svelte`, its own `applyStatsUpdate`).
+   */
+  if (data.autoSlippage !== undefined) next.autoSlippage = data.autoSlippage;
   if (data.quote) next.quote = { ...next.quote, ...data.quote };
   if (data.stats?.timeframes) {
     next = { ...next, stats: { ...next.stats, timeframes: mergeTimeframes(next.stats?.timeframes, data.stats.timeframes) } };
