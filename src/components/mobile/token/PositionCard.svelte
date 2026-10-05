@@ -12,7 +12,7 @@
   and two of them must not race each other into the same target list.
 -->
 <script>
-  import { formatCompact, formatUsd, getAddress, getChain, getTokenStats } from "../../../lib/api/token.svelte.js";
+  import { formatCompact, formatPrice, formatUsd, getAddress, getChain } from "../../../lib/api/token.svelte.js";
   import {
     cancelPendingSwap,
     commitPositionTargets,
@@ -75,8 +75,24 @@
    * wording rather than inventing a second one for the same number.
    */
   const invested = $derived(`$${Number(position?.investedUsd ?? 0).toFixed(2)}`);
-  const stats = $derived(getTokenStats());
-  const avgEntry = $derived(stats?.marketCap ? `${stats.marketCap} MC` : "\u2014");
+  /**
+   * What was paid, not what it costs now.
+   *
+   * `entryMcapUsd` and `entryPriceUsd` are the trade's own averages — the API's `avgEntryMcap` and
+   * `avgEntryPrice`, "the average price paid per token across confirmed buys, excluding fees" — so
+   * one buy and a DCA'd position read the same way: the cap, with the price that implies it in
+   * parentheses. It used to print the live market cap, which is a different number entirely.
+   *
+   * Both are 0 until a buy confirms, and then there is nothing to print but a dash.
+   */
+  const avgEntry = $derived.by(() => {
+    const cap = Number(position?.entryMcapUsd ?? 0);
+    const price = Number(position?.entryPriceUsd ?? 0);
+    if (!(cap > 0) && !(price > 0)) return "\u2014";
+    const capText = cap > 0 ? `$${formatCompact(cap)}` : "";
+    const priceText = price > 0 ? `(${formatPrice(price)})` : "";
+    return [capText, priceText].filter(Boolean).join(" ");
+  });
 
   /**
    * The exit plan's live targets, as the desktop card's chips: the kind and its number, what it

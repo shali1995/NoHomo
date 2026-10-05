@@ -8,13 +8,25 @@
   // label for that second row, value and all — its UI prints the market cap there).
   import AnimatedNumber from "./AnimatedNumber.svelte";
   import TokenBadge from "../../icons/token-badge.svelte";
-  import { getAddress, getChain, getTokenStats } from "../../lib/api/token.svelte.js";
+  import { formatCompact, formatPrice, getAddress, getChain } from "../../lib/api/token.svelte.js";
   import { cancelPendingSwap, isCancellingSwap } from "../../lib/api/trade.svelte.js";
 
   /** @type {{ position: import("../../lib/api/trade.svelte.js").Position }} */
   let { position } = $props();
 
-  const stats = $derived(getTokenStats());
+  /**
+   * What was paid, not what it costs now — the trade's own averages (`avgEntryMcap` and
+   * `avgEntryPrice`), so a single buy and a DCA'd position read the same: the cap, with the price
+   * it implies in parentheses. Both are 0 until a buy confirms, and then there is only a dash.
+   */
+  const avgEntry = $derived.by(() => {
+    const cap = Number(position?.entryMcapUsd ?? 0);
+    const price = Number(position?.entryPriceUsd ?? 0);
+    if (!(cap > 0) && !(price > 0)) return "\u2014";
+    const capText = cap > 0 ? `$${formatCompact(cap)}` : "";
+    const priceText = price > 0 ? `(${formatPrice(price)})` : "";
+    return [capText, priceText].filter(Boolean).join(" ");
+  });
   /**
    * Every pill the card carries, in one list so they share the row: a resting dip first (it is
    * what the trade is waiting to do), then the exit plan. Targets say how much they sell, the
@@ -80,7 +92,7 @@
       </div>
       <div class="flex justify-between items-center" style="line-height: 1;">
         <div class="text-xs text-text-secondary">Avg entry</div>
-        <AnimatedNumber class="text-xs" value={stats?.marketCap ? `${stats.marketCap} MC` : "—"} />
+        <span class="text-xs m-num">{avgEntry}</span>
       </div>
 
       <!-- The exit plan the position is running, in ombra's chip shape and our own colours:
