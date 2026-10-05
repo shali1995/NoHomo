@@ -521,7 +521,14 @@
     </div>
 
     <div class="control" class:control--ready={ready}>
-      {#if ready}
+      {#if !signedIn}
+        <!--
+          Signed out there is nothing to slide: the thumb is the "slide to place the order"
+          affordance, and a login is a tap. It also now says what the header says, so one action
+          has one name.
+        -->
+        <button type="button" class="login" onclick={requestConnect}>Login</button>
+      {:else if ready}
         <div
           class="track"
           bind:this={track}
@@ -1217,6 +1224,25 @@
 
   .control {
     margin-top: 12.32px;
+  }
+
+  /*
+   * The way in, at the token page's own action-bar size — 48 dp, 12 radius, 16/700 — so it is the
+   * same button the reader pressed to open this sheet, with the login's colour instead of the buy's.
+   */
+  .login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 48px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--m-blue);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 18.7px;
+    color: #ffffff;
   }
 
   .idle {
