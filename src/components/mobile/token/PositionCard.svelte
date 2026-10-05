@@ -16,7 +16,8 @@
   import {
     cancelPendingSwap,
     commitPositionTargets,
-    isCancellingSwap
+    isCancellingSwap,
+    removePositionTarget
   } from "../../../lib/api/trade.svelte.js";
   import TokenBadge from "../../../icons/token-badge.svelte";
   import ExitPlan from "./ExitPlan.svelte";
@@ -115,18 +116,37 @@
   let asking = $state(null);
   let askTimer = null;
 
-  function askToCancel(pill) {
-    if (isCancellingSwap(pill.swapId)) return;
-    if (asking === pill.id) {
+  /**
+   * The first tap asks, the second does it — and three seconds of nothing takes the ask back.
+   *
+   * A phone has no hover, so a confirmation the desktop shows on hover has to be a second tap; and
+   * a stray touch must not pull an order or drop a target. One `asking` id, so only one pill is
+   * ever asking, whatever kind of pill it is.
+   */
+  function tapToConfirm(id, run) {
+    if (asking === id) {
       clearTimeout(askTimer);
       asking = null;
-      void cancelPendingSwap({ chain: getChain(), address: getAddress(), swapId: pill.swapId });
+      run();
       return;
     }
-    asking = pill.id;
+    asking = id;
     clearTimeout(askTimer);
     askTimer = setTimeout(() => (asking = null), 3000);
   }
+
+  function askToCancelDip(pill) {
+    if (isCancellingSwap(pill.swapId)) return;
+    tapToConfirm(pill.id, () =>
+      cancelPendingSwap({ chain: getChain(), address: getAddress(), swapId: pill.swapId })
+    );
+  }
+
+  /** A target with a server id: the plan's own two boxes cannot describe a multiple or a price. */
+  const cancelTarget = (pill) =>
+    tapToConfirm(pill.id, () =>
+      removePositionTarget({ address: getAddress(), id: pill.id })
+    );
 
   $effect(() => () => clearTimeout(askTimer));
 
@@ -185,11 +205,24 @@
     <!-- One equal column per target, so two of them share the row the way the desktop's do. -->
     <div class="pills" style="grid-template-columns: repeat({targetPills.length}, minmax(0, 1fr));">
       {#each targetPills as pill (pill.id)}
-        <div class="pill pill--{pill.kind === "STOP_LOSS" ? "stop" : "target"}">
+        {@const cancellable = !String(pill.id).startsWith("config:")}
+        <button
+          type="button"
+          class="pill pill--{pill.kind === "STOP_LOSS" ? "stop" : "target"}"
+          class:pill--asking={asking === pill.id}
+          class:pill--static={!cancellable}
+          disabled={!cancellable || saving}
+          title={cancellable ? `Cancel ${pill.tag}` : undefined}
+          onclick={() => cancellable && cancelTarget(pill)}
+        >
           <span class="pill-tag">{pill.tag}</span>
           <span class="pill-label m-num">{pill.label}</span>
-          <span class="pill-note m-num">{pill.note}</span>
-        </div>
+          {#if asking === pill.id}
+            <span class="pill-note pill-note--ask">Cancel</span>
+          {:else}
+            <span class="pill-note m-num">{pill.note}</span>
+          {/if}
+        </button>
       {/each}
     </div>
   {/if}
@@ -201,7 +234,7 @@
       class="pill"
       class:pill--asking={asking === dip.id}
       title="Cancel dip buy"
-      onclick={() => askToCancel(dip)}
+      onclick={() => askToCancelDip(dip)}
     >
       <span class="pill-tag">{dip.tag}</span>
       <span class="pill-label m-num">{dip.label}</span>
@@ -415,6 +448,12 @@
     border-radius: 10px;
     background: #e1b0481f;
     cursor: pointer;
+  }
+
+  /* A target the plan's own boxes cannot describe: shown, not pressable. */
+  .pill--static,
+  .pill:disabled {
+    cursor: default;
   }
 
   .pill--asking {

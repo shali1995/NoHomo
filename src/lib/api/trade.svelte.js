@@ -1403,6 +1403,35 @@ export async function commitPositionTargets({ address, takeProfit, stopLoss }) {
 }
 
 /**
+ * Remove one sell target, whatever its trigger is.
+ *
+ * `commitPositionTargets` removes the *percent* target of a kind, because its two percent boxes can
+ * only express a percent. A card's pill can be a multiple, a price or a market cap as well, and the
+ * endpoint does not care which it is: it takes an id. So a pill is cancelled by id, not by rewriting
+ * a plan that could not describe it.
+ *
+ * @param {{ address: string, id: string }} input
+ */
+export async function removePositionTarget({ address, id }) {
+  if (!getAuthToken() || !id) return { changed: false };
+  try {
+    const result = await api.DELETE("/v2/trade/{chain}/{token}/targets/remove/{id}", {
+      params: { path: { chain: appChain(), token: address, id } }
+    });
+    if (result.error) throw new Error(errorMessage(result.error));
+    if (result.data?.trade) patchPosition(result.data.trade);
+    await reloadTrades();
+    return { changed: true };
+  } catch (failure) {
+    const said = failure instanceof Error ? failure.message : String(failure);
+    addToast("error", "Target not removed", said, 6000);
+    // whatever the server did take is the truth now
+    await reloadTrades();
+    return { changed: false, error: said };
+  }
+}
+
+/**
  * A sell, by percent of what is held. The body is `{ pct }` and nothing else: gas, slippage
  * and anti-MEV come from the trade's own saved settings.
  *
