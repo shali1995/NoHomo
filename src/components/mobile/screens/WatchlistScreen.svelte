@@ -14,6 +14,7 @@
   import { tokenImage } from "../../../lib/api/config.js";
   import { formatUsdCompact, splitPrice } from "../../../lib/api/trending.svelte.js";
   import { chainSlug } from "../../../lib/routes.js";
+  import PositionsSection from "../PositionsSection.svelte";
 
   let { onopen } = $props();
 
@@ -138,8 +139,9 @@
     <p class="empty">Your watchlist is empty</p>
   {/if}
 
-  <div class="sub sub--holdings">Your holdings</div>
-  <p class="empty">Your portfolio is empty</p>
+  <!-- The desktop panel's "Your positions", in the phone's language: the switch, the rows, the
+       dust, and the closed trades behind the other side of the switch. -->
+  <PositionsSection />
 </div>
 
 <style>
@@ -174,10 +176,6 @@
     font-size: 14px;
     line-height: 16.5px;
     color: var(--m-muted);
-  }
-
-  .sub--holdings {
-    margin-top: 8px;
   }
 
   .trow {
