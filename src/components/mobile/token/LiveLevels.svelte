@@ -208,17 +208,28 @@
 
   /**
    * The frame loop: place every line at its own price. A level outside the plot waits at the edge
-   * it left by, dimmed, where its box says so, rather than being drawn nowhere.
+   * it left by, dimmed, rather than being drawn nowhere.
+   *
+   * Where that edge is, is the **plot's** edge and not the box's: the layout hands over its own
+   * padding, and a line is a 44 dp band centred on its price (`margin-top: -22`) — so clamping to
+   * the box put half the band above the plot, over the header. Pinning it to `pad.top + 22` keeps a
+   * target that is nowhere near the visible range on the chart's own top edge instead of above it.
    */
+  const BAND = 22;
+
   function place() {
     const box = layout();
     if (box) {
+      const padTop = Number(box.pad?.top) || 0;
+      const padBottom = Number(box.pad?.bottom) || 0;
+      const top = padTop + BAND;
+      const bottom = Math.max(top, box.h - padBottom - BAND);
       for (const level of levels) {
         const node = rows.get(level.key);
         if (!node) continue;
         const y = box.toY(valueOf(level));
-        const inside = Number.isFinite(y) && y >= 0 && y <= box.h;
-        node.style.transform = `translateY(${Math.min(Math.max(y, 6), box.h - 6)}px)`;
+        const inside = Number.isFinite(y) && y >= top && y <= bottom;
+        node.style.transform = `translateY(${Math.min(Math.max(y, top), bottom)}px)`;
         node.dataset.off = inside ? "" : "true";
       }
       const level = armedLevel();
@@ -230,7 +241,7 @@
               colour: colourOf(level),
               price: valueOf(level),
               delta: levelDistance(level, valueOf(level)),
-              y: Math.min(Math.max(y, 22), box.h - 22)
+              y: Math.min(Math.max(y, top), bottom)
             }
           : null;
       }
@@ -295,7 +306,7 @@
           </span>
         {/if}
         <span class="tag">{level.label}</span>
-        <span class="price m-num">${formatPrice(valueOf(level))}</span>
+        <span class="price m-num">{formatPrice(valueOf(level))}</span>
       </span>
     </div>
   {/each}
@@ -303,7 +314,7 @@
   {#if readout}
     <div class="readout" style="top: {readout.y}px; --tone: {readout.colour}">
       <span class="readout-name">{readout.level.label}</span>
-      <span class="readout-price m-num">${formatPrice(readout.price)}</span>
+      <span class="readout-price m-num">{formatPrice(readout.price)}</span>
       <span class="readout-delta m-num">{readout.delta}</span>
     </div>
   {/if}
