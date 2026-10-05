@@ -57,13 +57,13 @@
 
 {#if open}
   <div
-    class="fixed inset-0 bg-black/70 z-modal flex items-center justify-center p-3"
+    class="welcome-overlay fixed inset-0 bg-black/70 z-modal flex items-center justify-center p-3"
     role="presentation"
     onclick={() => (muted = false)}
   >
     <div
       class="welcome-panel bg-bg-primary rounded-3xl border border-bg-tertiary p-4 overflow-y-auto"
-      style="width: min(600px, calc(100vw - 1.5rem)); max-height: calc(100vh - 1.5rem);"
+      style="width: min(600px, calc(100vw - 1.5rem));"
       role="dialog"
       aria-modal="true"
       aria-label="Welcome to NOHOMO"
@@ -183,6 +183,10 @@
    * moves everything in it, mark included. Below the two-column breakpoint the steps stack and
    * there is no height to hold.
    */
+  .welcome-panel {
+    max-height: calc(100vh - 1.5rem);
+  }
+
   .welcome-body {
     display: flex;
     gap: 14px;
@@ -221,13 +225,20 @@
     }
   }
 
-  /* The phone's own screen: full height inside the status bar, and its own scroll. */
+  /* The phone's own screen: the whole screen bar the browser's bar, and its own scroll. */
   @media (max-width: 900px) {
+    /* The sheet's own geometry, the one the buy and sell screens use: every edge of the screen. */
+    .welcome-overlay {
+      padding: 0;
+      align-items: stretch;
+    }
+
     .welcome-panel {
       width: 100%;
-      max-height: calc(100dvh - 1rem);
+      height: 100dvh;
+      max-height: none;
       padding: 14px;
-      border-radius: 22px;
+      border-radius: 0;
       overscroll-behavior: contain;
     }
     .welcome-mute {
@@ -239,11 +250,17 @@
       border-radius: 10px;
     }
     /* Within a thumb's reach however far the copy is scrolled. It keeps the accent blue: the
-       rule used to paint the page's own background over it, which is why it read as a black bar. */
+       rule used to paint the page's own background over it, which is why it read as a black bar.
+
+       The space under it is the browser's bar, and it has to be a margin here rather than padding
+       on the panel: a sticky box is placed by its own margin box against the scrollport, so padding
+       under it is never counted. On iOS 26 Safari's bar floats over the page and is *not* in
+       `env(safe-area-inset-bottom)` — that inset is the home indicator beneath it — so the bar's own
+       height is added explicitly. */
     .welcome-go {
       position: sticky;
       bottom: 0;
-      padding-bottom: 10px;
+      margin-bottom: calc(env(safe-area-inset-bottom) + 3rem);
       box-shadow: 0 -14px 22px rgba(6, 5, 16, 0.92);
     }
   }
