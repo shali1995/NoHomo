@@ -113,9 +113,13 @@
 {/if}
 
 <style>
+  /*
+   * No inset of its own: where this row sits decides its gutter. The trade sheet wraps it in 16 dp
+   * (its other rows' own gutter) and the position card draws it straight inside its padding — with
+   * a margin here the card's row was 16 dp narrower than the pills above it, which are full width.
+   */
   .plan {
-    /* its own air above the keys, which end flush on this row otherwise */
-    margin: 6px 16px 0;
+    margin: 0;
   }
 
   /*

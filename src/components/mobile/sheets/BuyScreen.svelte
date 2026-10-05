@@ -497,7 +497,8 @@
   </div>
 
   {#if !selling}
-    <BuyExitPlan bind:plan />
+    <!-- the sheet's own gutter, and its own air above the keys -->
+    <div class="plan-slot"><BuyExitPlan bind:plan /></div>
   {/if}
 
   <div class="foot">
@@ -875,6 +876,12 @@
   }
 
   /* Ours: the order type. The capture's form has one buy; this one can also wait for a dip. */
+  /* The exit-plan row's place in the sheet: the gutter its neighbours use, and air above the keys. */
+  .plan-slot {
+    flex: 0 0 auto;
+    margin: 6px 16px 0;
+  }
+
   /* Label and chips as one centred group, so the row reads as its own control. */
   .order {
     display: flex;
