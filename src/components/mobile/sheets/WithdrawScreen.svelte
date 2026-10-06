@@ -286,6 +286,8 @@
   let submitting = $state(false);
   let submitError = $state("");
   let result = $state(null);
+  /** Whether this attempt asked a wallet to sign — the wallet's own wording only fits then. */
+  let signedByWallet = $state(false);
   let phase = $state("");
   let closeTimer = 0;
 
@@ -308,25 +310,49 @@
     submitting = true;
     submitError = "";
     result = null;
+    signedByWallet = false;
     try {
       phase = "Preparing the withdrawal…";
       // USDC is an SPL token: the mint goes with the amount so the backend moves the
       // stablecoin and not the chain's native coin.
       const body = `{"chain":${JSON.stringify(asset.chain)},"tokenAddress":${JSON.stringify(asset.tokenAddress)},"amount":${exact},"destinationAddress":${JSON.stringify(destination)}}`;
       const prepared = await post("/v2/user/wallets/withdraw", body);
-      phase = "Waiting for Phantom to sign…";
-      const signature = (await signPreparedTransaction(prepared.transactionToSign)).signature;
-      phase = "Submitting the signed withdrawal…";
-      result = await post("/v2/user/wallets/withdraw/confirm", {
-        transactionToSign: prepared.transactionToSign,
-        signature
-      });
+      /*
+       * Who signs it is the backend's call, and it says so in the prepare response:
+       * `signatureModel` is `"client"` or `"server"`.
+       *
+       * `"server"` is a Google account's withdrawal — its wallet is held by the backend, which has
+       * the key, so the prepared transaction goes back **unsigned** and the service signs it. Asking
+       * a browser wallet for that signature asked the wrong party entirely, which is why a Google
+       * reader used to get a Phantom prompt for a key Phantom never had.
+       *
+       * `"client"` is a wallet session's: the linked wallet signs, exactly as before. Only this
+       * branch may ask for a wallet, and the API asks for a signature only in this branch —
+       * "send `signature` only when the prepare response has `signatureModel=client`".
+       */
+      let confirmation = { transactionToSign: prepared.transactionToSign };
+      if (prepared.signatureModel === "client") {
+        signedByWallet = true;
+        phase = "Waiting for Phantom to sign…";
+        confirmation = {
+          transactionToSign: prepared.transactionToSign,
+          signature: (await signPreparedTransaction(prepared.transactionToSign)).signature
+        };
+      }
+      phase = "Submitting the withdrawal…";
+      result = await post("/v2/user/wallets/withdraw/confirm", confirmation);
       // The balance this screen was quoting has just moved; read it again.
       void reloadAccount();
       // The flow is over: the money is out, and the app behind shows the new balance.
       closeTimer = setTimeout(() => onclose?.(), 1800);
     } catch (e) {
-      const said = walletMessage(e instanceof Error ? e.message : String(e));
+      /*
+       * Phantom's wording only when a wallet was actually asked. A `server` withdrawal never
+       * touches one, and its failures are the backend's — an error mentioning an unavailable
+       * wallet must not be reworded as Phantom being missing from the browser.
+       */
+      const raw = e instanceof Error ? e.message : String(e);
+      const said = signedByWallet ? walletMessage(raw) : raw;
       submitError = `${phase.replace(/…$/, "")} — ${said}`;
       console.warn("[withdraw] sign failed", {
         step: phase,

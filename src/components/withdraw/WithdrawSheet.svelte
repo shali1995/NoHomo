@@ -295,6 +295,8 @@
    */
   let submitting = $state(false);
   let submitError = $state("");
+  /** Whether this attempt asked a wallet to sign — the wallet's own wording only fits then. */
+  let signedByWallet = $state(false);
   let result = $state(null);
   /** Which of the three calls is in flight, so a failure can name it. */
   let phase = $state("");
@@ -313,6 +315,7 @@
 
     submitting = true;
     submitError = "";
+    signedByWallet = false;
     result = null;
     try {
       phase = "Preparing the withdrawal…";
@@ -321,20 +324,41 @@
       // stablecoin and not the chain's native coin.
       const body = `{"chain":${JSON.stringify(asset.chain)},"tokenAddress":${JSON.stringify(asset.tokenAddress)},"amount":${exact},"destinationAddress":${destination}}`;
       const prepared = await post("/v2/user/wallets/withdraw", body);
-      phase = "Waiting for Phantom to sign…";
-      const signature = (await signPreparedTransaction(prepared.transactionToSign)).signature;
-      phase = "Submitting the signed withdrawal…";
-      result = await post("/v2/user/wallets/withdraw/confirm", {
-        transactionToSign: prepared.transactionToSign,
-        signature
-      });
+      /*
+       * Who signs it is the backend's call, and it says so in the prepare response:
+       * `signatureModel` is `"client"` or `"server"`.
+       *
+       * `"server"` is a Google account's withdrawal — its wallet is held by the backend, which has
+       * the key, so the prepared transaction goes back **unsigned** and the service signs it. Asking
+       * a browser wallet for that signature asked the wrong party entirely, which is why a Google
+       * reader used to get a Phantom prompt for a key Phantom never had.
+       *
+       * `"client"` is a wallet session's: the linked wallet signs, exactly as before. Only this
+       * branch may ask for a wallet, and the API asks for a signature only in this branch —
+       * "send `signature` only when the prepare response has `signatureModel=client`".
+       */
+      let confirmation = { transactionToSign: prepared.transactionToSign };
+      if (prepared.signatureModel === "client") {
+        signedByWallet = true;
+        phase = "Waiting for Phantom to sign…";
+        confirmation = {
+          transactionToSign: prepared.transactionToSign,
+          signature: (await signPreparedTransaction(prepared.transactionToSign)).signature
+        };
+      }
+      phase = "Submitting the withdrawal…";
+      result = await post("/v2/user/wallets/withdraw/confirm", confirmation);
       // The balance the sheet was quoting has just moved; read it again.
       void reloadAccount();
     } catch (e) {
       // The step is named because the three calls fail for different reasons: preparing is
       // the backend refusing, signing is the wallet, confirming is the signature or the
       // transaction. "It did nothing" is not a diagnosis.
-      const said = walletMessage(e instanceof Error ? e.message : String(e));
+      //
+      // Phantom's wording only when a wallet was actually asked: a `server` withdrawal never
+      // touches one, so its failures are the backend's own words.
+      const raw = e instanceof Error ? e.message : String(e);
+      const said = signedByWallet ? walletMessage(raw) : raw;
       submitError = `${phase.replace(/…$/, "")} — ${said}`;
       // One line, with the wallet's own state and the raw text: the two failures above are
       // invisible from the sheet alone, and this is what makes the next report actionable.
