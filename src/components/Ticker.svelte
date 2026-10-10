@@ -138,7 +138,7 @@
     >Powered by opendex.ws</a>
     <a
       class="text-text-primary hover:text-text-primary transition-colors"
-      href="https://t.me/USENOHOMO"
+      href="https://github.com/shali1995/NoHomo"
       target="_blank"
       rel="noreferrer"
     >Open source</a>

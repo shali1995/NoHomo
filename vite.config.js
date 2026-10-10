@@ -26,6 +26,19 @@ function spaFallback() {
 // origin (the capture's viewport, scrollbars and DPR only reproduce there).
 export default defineConfig({
   plugins: [svelte(), spaFallback()],
-  server: { port: 5180, host: "127.0.0.1", strictPort: true },
-  preview: { port: 5180, host: "127.0.0.1", strictPort: true }
+  // `allowedHosts` so the machine's own name works: the LAN address here changes between
+  // .63, .18 and .153 in a day, and a phone that bookmarked one of them just fails. The
+  // `.local` name does not move. Vite checks the Host header and answers 403 without this.
+  server: {
+    port: 5180,
+    host: "127.0.0.1",
+    strictPort: true,
+    allowedHosts: [".local", "localhost", "127.0.0.1"]
+  },
+  preview: {
+    port: 5180,
+    host: "127.0.0.1",
+    strictPort: true,
+    allowedHosts: [".local", "localhost", "127.0.0.1"]
+  }
 });
